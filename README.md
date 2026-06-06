@@ -40,7 +40,7 @@
 
 ### 方式一：WebDAV（推荐）
 
-支持坚果云、NextCloud、自建服务器等任何标准 WebDAV 服务。
+支持坚果云、NextCloud、家用NAS、自建服务器等任何标准 WebDAV 服务。
 
 ```
 设置 → 同步 → WebDAV
