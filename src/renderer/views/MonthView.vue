@@ -35,14 +35,14 @@
           <template #header>
             <span>时间分布</span>
           </template>
-          <v-chart class="chart" :option="pieOption" autoresize />
+          <div ref="pieChartRef" class="chart"></div>
         </el-card>
 
         <el-card class="chart-card">
           <template #header>
             <span>每日趋势</span>
           </template>
-          <v-chart class="chart" :option="lineOption" autoresize />
+          <div ref="lineChartRef" class="chart"></div>
         </el-card>
       </div>
 
@@ -75,20 +75,18 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { PieChart, LineChart } from 'echarts/charts'
-import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
+import * as echarts from 'echarts'
 import { useTimeBlockStore } from '@stores/timeBlock'
-
-use([CanvasRenderer, PieChart, LineChart, TooltipComponent, LegendComponent, GridComponent])
 
 const store = useTimeBlockStore()
 const currentMonth = ref(dayjs())
+const pieChartRef = ref(null)
+const lineChartRef = ref(null)
+let pieChart = null
+let lineChart = null
 
 const currentMonthStr = computed(() => currentMonth.value.format('YYYY年MM月'))
 
@@ -249,6 +247,33 @@ function nextMonth() {
 function goToday() {
   currentMonth.value = dayjs()
 }
+
+function initCharts() {
+  nextTick(() => {
+    if (pieChartRef.value) {
+      if (pieChart) pieChart.dispose()
+      pieChart = echarts.init(pieChartRef.value)
+      pieChart.setOption(pieOption.value)
+    }
+    if (lineChartRef.value) {
+      if (lineChart) lineChart.dispose()
+      lineChart = echarts.init(lineChartRef.value)
+      lineChart.setOption(lineOption.value)
+    }
+  })
+}
+
+watch([monthBlocks, currentMonth], () => {
+  initCharts()
+}, { immediate: true })
+
+onMounted(() => {
+  initCharts()
+  window.addEventListener('resize', () => {
+    pieChart?.resize()
+    lineChart?.resize()
+  })
+})
 </script>
 
 <style lang="scss" scoped>
