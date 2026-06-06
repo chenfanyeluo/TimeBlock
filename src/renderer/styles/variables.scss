@@ -1,0 +1,46 @@
+:root {
+  --primary-color: #409eff;
+  --primary-light: #ecf5ff;
+  --success-color: #67c23a;
+  --warning-color: #e6a23c;
+  --danger-color: #f56c6c;
+  --info-color: #909399;
+
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --bg-sidebar: #304156;
+  --bg-hover: #f5f7fa;
+
+  --text-primary: #303133;
+  --text-regular: #606266;
+  --text-secondary: #909399;
+  --text-placeholder: #c0c4cc;
+
+  --border-color: #dcdfe6;
+  --border-light: #e4e7ed;
+
+  --sidebar-width: 200px;
+  --header-height: 60px;
+  --timeline-width: 60px;
+
+  --category-work: #409eff;
+  --category-study: #67c23a;
+  --category-rest: #e6a23c;
+  --category-entertainment: #f56c6c;
+  --category-exercise: #9254de;
+  --category-other: #909399;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #141414;
+  --bg-secondary: #1f1f1f;
+  --bg-sidebar: #141414;
+  --bg-hover: #2c2c2c;
+
+  --text-primary: #e0e0e0;
+  --text-regular: #b0b0b0;
+  --text-secondary: #808080;
+
+  --border-color: #434343;
+  --border-light: #303030;
+}
