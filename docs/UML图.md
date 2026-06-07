@@ -61,16 +61,15 @@ User --> UC4 : 查看
 User --> UC5 : 浏览
 User --> UC6 : 浏览
 User --> UC7 : 浏览
-User --> UC8 : 执行
-User --> UC9 : 执行
+User --> UC8 : 存储
+User --> UC9 : 同步
 User --> UC10 : 登录
 User --> UC11 : 注册
 User --> UC12 : 修改
 User --> UC13 : 查看
 User --> UC14 : 导出
-User --> UC15 : 配置
-User --> UC16 : 管理
-User --> UC17 : 切换
+User --> UC15 : 管理
+User --> UC16 : 切换
 
 Admin --> UC18 : 管理
 Admin --> UC19 : 监控

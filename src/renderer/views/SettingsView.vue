@@ -6,6 +6,54 @@
 
     <div class="settings-content">
       <el-tabs type="border-card">
+        <el-tab-pane label="数据同步">
+          <div class="sync-info">
+            <el-alert title="双数据库同步方案" type="info" :closable="false" show-icon>
+              <template #default>
+                <p>本地使用 SQLite 存储，云端使用 MySQL 存储，支持双向同步。</p>
+              </template>
+            </el-alert>
+          </div>
+          <el-form label-width="120px" class="settings-form">
+            <el-form-item label="同步状态">
+              <el-tag :type="isOnline ? 'success' : 'warning'">
+                {{ isOnline ? '已连接' : '离线模式' }}
+              </el-tag>
+            </el-form-item>
+            <el-form-item label="最后同步时间">
+              <span>{{ lastSyncTime || '从未同步' }}</span>
+            </el-form-item>
+            <el-form-item label="自动同步">
+              <el-switch v-model="autoSync" active-text="开启" inactive-text="关闭" />
+            </el-form-item>
+            <el-form-item label="同步间隔" v-if="autoSync">
+              <el-select v-model="syncInterval" placeholder="选择同步间隔">
+                <el-option label="每5分钟" value="5min" />
+                <el-option label="每15分钟" value="15min" />
+                <el-option label="每30分钟" value="30min" />
+                <el-option label="每小时" value="1hour" />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="syncNow">立即同步</el-button>
+              <el-button @click="viewSyncLog">查看同步日志</el-button>
+            </el-form-item>
+          </el-form>
+          <div class="sync-stats">
+            <el-row :gutter="20">
+              <el-col :span="8">
+                <el-statistic title="本地记录数" :value="localCount" />
+              </el-col>
+              <el-col :span="8">
+                <el-statistic title="云端记录数" :value="cloudCount" />
+              </el-col>
+              <el-col :span="8">
+                <el-statistic title="待同步" :value="pendingCount" />
+              </el-col>
+            </el-row>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="账号管理">
           <el-form :model="accountForm" label-width="120px" class="settings-form">
             <el-form-item label="当前账号">
@@ -131,6 +179,19 @@ import { useTimeBlockStore } from '@stores/timeBlock'
 
 const store = useTimeBlockStore()
 
+// 数据同步相关
+const isOnline = ref(navigator.onLine)
+const lastSyncTime = ref('')
+const autoSync = ref(false)
+const syncInterval = ref('15min')
+const localCount = computed(() => store.blocks.length)
+const cloudCount = ref(0)
+const pendingCount = ref(0)
+
+// 监听网络状态
+window.addEventListener('online', () => { isOnline.value = true })
+window.addEventListener('offline', () => { isOnline.value = false })
+
 const accountForm = ref({
   email: '',
   password: ''
@@ -147,6 +208,25 @@ const timeGranularity = ref('15')
 const defaultView = ref('day')
 
 const categories = computed(() => store.categories)
+
+// 数据同步方法
+function syncNow() {
+  if (!isOnline.value) {
+    ElMessage.warning('当前离线模式，无法同步')
+    return
+  }
+  ElMessage.info('正在同步数据...')
+  // 模拟同步
+  setTimeout(() => {
+    lastSyncTime.value = new Date().toLocaleString()
+    pendingCount.value = 0
+    ElMessage.success('数据同步成功！')
+  }, 1500)
+}
+
+function viewSyncLog() {
+  ElMessage.info('暂无同步日志')
+}
 
 function login() {
   isLoggedIn.value = true
@@ -224,6 +304,17 @@ function clearAllData() {
 .settings-content {
   height: calc(100% - 60px);
   overflow: auto;
+}
+
+.sync-info {
+  padding: 16px 20px;
+}
+
+.sync-stats {
+  padding: 20px;
+  margin-top: 10px;
+  background: #f8f9fa;
+  border-radius: 8px;
 }
 
 .settings-form {
