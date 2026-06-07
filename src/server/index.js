@@ -41,6 +41,40 @@ app.use(cors({
   credentials: true
 }))
 
+// =============================================
+// API 限流 (简单内存实现)
+// =============================================
+
+const requestCounts = new Map()
+
+function rateLimiter(req, res, next) {
+  const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000
+  const max = parseInt(process.env.RATE_LIMIT_MAX) || 100
+  const key = req.ip || req.connection.remoteAddress
+  const now = Date.now()
+
+  if (!requestCounts.has(key)) {
+    requestCounts.set(key, [])
+  }
+
+  const timestamps = requestCounts.get(key).filter(ts => now - ts < windowMs)
+  timestamps.push(now)
+  requestCounts.set(key, timestamps)
+
+  if (timestamps.length > max) {
+    return res.status(429).json({
+      success: false,
+      error: {
+        code: 'RATE_LIMITED',
+        message: '请求过于频繁，请稍后再试'
+      }
+    })
+  }
+
+  next()
+}
+app.use('/api', rateLimiter)
+
 // 日志
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'))
@@ -107,9 +141,10 @@ async function start() {
 ╔══════════════════════════════════════════════╗
 ║       🕐 TimeBlock API Server 已启动        ║
 ╠══════════════════════════════════════════════╣
-║  地址: http://localhost:${PORT}                  ║
-║  环境: ${(process.env.NODE_ENV || 'development').padEnd(11)}                   ║
-║  数据库: ${(process.env.DB_DIALECT || 'sqlite').padEnd(6)}                  ║
+║  地址:     http://localhost:${PORT}              ║
+║  环境:     ${(process.env.NODE_ENV || 'development').padEnd(11)}                 ║
+║  数据库:   ${(process.env.DB_DIALECT || 'mysql').padEnd(6)}                    ║
+║  架构:     SQLite ↔ MySQL                  ║
 ║  健康检查: /api/health                      ║
 ╚══════════════════════════════════════════════╝
       `)

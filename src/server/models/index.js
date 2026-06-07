@@ -1,6 +1,8 @@
 const User = require('./User')
 const Category = require('./Category')
 const TimeBlock = require('./TimeBlock')
+const SyncLog = require('./SyncLog')
+const Statistic = require('./Statistic')
 
 // =============================================
 // 模型关联关系
@@ -39,8 +41,43 @@ TimeBlock.belongsTo(Category, {
   as: 'category'
 })
 
+// User ↔ SyncLog (一对多)
+User.hasMany(SyncLog, {
+  foreignKey: 'user_id',
+  as: 'syncLogs',
+  onDelete: 'CASCADE'
+})
+SyncLog.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user'
+})
+
+// User ↔ Statistic (一对多)
+User.hasMany(Statistic, {
+  foreignKey: 'user_id',
+  as: 'statistics',
+  onDelete: 'CASCADE'
+})
+Statistic.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user'
+})
+
+// Category ↔ Statistic (一对多, 可选)
+Category.hasMany(Statistic, {
+  foreignKey: 'category_id',
+  as: 'statistics',
+  onDelete: 'SET NULL'
+})
+Statistic.belongsTo(Category, {
+  foreignKey: 'category_id',
+  as: 'category'
+})
+
 module.exports = {
   User,
   Category,
-  TimeBlock
+  TimeBlock,
+  SyncLog,
+  Statistic
 }

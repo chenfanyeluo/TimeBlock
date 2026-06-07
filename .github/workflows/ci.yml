@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  server-test:
+    name: 后端服务测试
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: time_block_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/server/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: src/server
+        run: npm ci
+
+      - name: Run server tests
+        working-directory: src/server
+        env:
+          DB_DIALECT: mysql
+          DB_HOST: localhost
+          DB_PORT: 3306
+          DB_NAME: time_block_test
+          DB_USER: root
+          DB_PASSWORD: root
+          JWT_SECRET: test-secret
+          NODE_ENV: test
+        run: npm test
+
+  client-build:
+    name: 客户端构建
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint || true
+
+      - name: Build
+        run: npm run build

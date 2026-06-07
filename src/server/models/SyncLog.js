@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize')
 const sequelize = require('../config/database')
 
-const SyncHistory = sequelize.define('SyncHistory', {
+const SyncLog = sequelize.define('SyncLog', {
   id: {
     type: DataTypes.BIGINT,
     primaryKey: true,
@@ -11,9 +11,16 @@ const SyncHistory = sequelize.define('SyncHistory', {
     type: DataTypes.BIGINT,
     allowNull: false
   },
-  sync_id: {
-    type: DataTypes.STRING(100),
-    allowNull: false
+  sync_type: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    defaultValue: 'manual',
+    validate: {
+      isIn: {
+        args: [['manual', 'auto']],
+        msg: '同步类型无效'
+      }
+    }
   },
   status: {
     type: DataTypes.STRING(20),
@@ -26,29 +33,20 @@ const SyncHistory = sequelize.define('SyncHistory', {
       }
     }
   },
+  records_synced: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  },
   started_at: {
     type: DataTypes.DATE,
-    allowNull: false
+    allowNull: false,
+    defaultValue: DataTypes.NOW
   },
   completed_at: {
     type: DataTypes.DATE,
     allowNull: true,
     defaultValue: null
-  },
-  uploaded: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0
-  },
-  downloaded: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0
-  },
-  conflicts: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0
   },
   error_message: {
     type: DataTypes.TEXT,
@@ -56,23 +54,13 @@ const SyncHistory = sequelize.define('SyncHistory', {
     defaultValue: null
   }
 }, {
-  tableName: 'sync_history',
+  tableName: 'sync_logs',
   underscored: true,
   timestamps: false,
   indexes: [
-    {
-      name: 'idx_sync_history_user_id',
-      fields: ['user_id']
-    },
-    {
-      name: 'idx_sync_history_sync_id',
-      fields: ['sync_id']
-    },
-    {
-      name: 'idx_sync_history_started_at',
-      fields: ['user_id', 'started_at']
-    }
+    { name: 'idx_sync_logs_user', fields: ['user_id'] },
+    { name: 'idx_sync_logs_time', fields: ['user_id', 'started_at'] }
   ]
 })
 
-module.exports = SyncHistory
+module.exports = SyncLog

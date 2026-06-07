@@ -1,11 +1,11 @@
 -- =============================================
--- TimeBlock 数据库初始化脚本
+-- TimeBlock 数据库初始化脚本 (双数据库架构)
 -- 数据库: time_block
 -- 字符集: utf8mb4 / utf8mb4_unicode_ci
 -- 引擎: InnoDB
+-- 架构: SQLite(本地) ↔ MySQL(云端) 直接同步
 -- =============================================
 
--- 创建数据库
 CREATE DATABASE IF NOT EXISTS time_block
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
@@ -65,3 +65,39 @@ CREATE TABLE IF NOT EXISTS time_blocks (
   CONSTRAINT fk_timeblock_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_timeblock_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='时间块表';
+
+-- =============================================
+-- 4. sync_logs - 同步记录表
+-- =============================================
+CREATE TABLE IF NOT EXISTS sync_logs (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  sync_type VARCHAR(20) NOT NULL DEFAULT 'manual' COMMENT 'manual/auto',
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/in_progress/completed/failed',
+  records_synced INT NOT NULL DEFAULT 0,
+  started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at DATETIME NULL,
+  error_message TEXT NULL,
+  PRIMARY KEY (id),
+  INDEX idx_sync_logs_user (user_id),
+  INDEX idx_sync_logs_time (user_id, started_at),
+  CONSTRAINT fk_synclog_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='同步记录表';
+
+-- =============================================
+-- 5. statistics - 统计汇总表 (预计算)
+-- =============================================
+CREATE TABLE IF NOT EXISTS statistics (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  stat_date DATE NOT NULL,
+  category_id BIGINT NULL COMMENT 'NULL=全天总计',
+  total_seconds INT NOT NULL DEFAULT 0,
+  block_count INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY idx_stat_unique (user_id, stat_date, category_id),
+  INDEX idx_stat_user_date (user_id, stat_date),
+  CONSTRAINT fk_stat_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_stat_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='统计汇总表';
