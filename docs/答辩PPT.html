@@ -301,7 +301,7 @@
       <table class="member-table">
         <tr><th>成员</th><th>角色</th><th>主要职责</th></tr>
         <tr><td><strong>成员A</strong></td><td>项目负责人 & 架构师</td><td>架构设计、数据库设计、API规范、代码审查</td></tr>
-        <tr><td><strong>成员B</strong></td><td>Electron桌面端开发</td><td>主进程、系统托盘、SQLite、应用打包</td></tr>
+        <tr><td><strong>成员B</strong></td><td>Electron桌面端开发</td><td>主进程、系统托盘、、应用打包</td></tr>
         <tr><td><strong>成员C</strong></td><td>前端界面开发</td><td>Vue界面、时间块组件、拖拽交互、ECharts</td></tr>
         <tr><td><strong>成员D</strong></td><td>后端 & 账号系统</td><td>Node.js后端、MySQL、JWT认证、用户系统</td></tr>
         <tr><td><strong>成员E</strong></td><td>WebDAV同步 & 测试</td><td>WebDAV同步、数据加密、冲突处理、测试编写</td></tr>
@@ -342,7 +342,7 @@
       <div class="feature-box"><span>2. 任务追踪</span> → 实际用时记录，计划vs执行对比</div>
       <div class="feature-box"><span>3. 统计报表</span> → 日/周/月时间流向可视化</div>
       <div class="feature-box"><span>4. 双线同步</span> → WebDAV + 云端账号双保险</div>
-      <div class="feature-box"><span>5. 离线优先</span> → 本地SQLite存储，有网自动同步</div>
+      <div class="feature-box"><span>5. 离线优先</span> → 本地存储，有网自动同步</div>
       <div class="feature-box"><span>6. 账号系统</span> → 用户注册/登录/数据隔离</div>
       
       <div class="slide-subtitle">优先级划分</div>
@@ -372,9 +372,8 @@
         <tr><td>前端框架</td><td>Vue 3 + Element Plus</td><td>现代化UI开发</td></tr>
         <tr><td>图表库</td><td>ECharts 5.x</td><td>数据可视化</td></tr>
         <tr><td>后端框架</td><td>Node.js + Express</td><td>RESTful API</td></tr>
-        <tr><td>本地数据库</td><td>SQLite</td><td>离线存储</td></tr>
-        <tr><td>云端数据库</td><td>MySQL 8.0</td><td>用户数据云端存储</td></tr>
-        <tr><td>同步协议</td><td>WebDAV</td><td>坚果云/NextCloud</td></tr>
+        <tr><td>数据库</td><td>MySQL 8.0</td><td>用户数据存储</td></tr>
+        <tr><td>同步协议</td><td>WebDAV</td><td>坚果云/NextCloud 备份</td></tr>
         <tr><td>身份认证</td><td>JWT + bcrypt</td><td>安全认证</td></tr>
       </table>
     </div>
@@ -404,10 +403,10 @@
                    │
 ┌──────────────────┼─────────────────────────┐
 │              数据层                          │
-│  ┌───────┐  ┌───────┐  ┌───────────┐       │
-│  │ SQLite│  │ MySQL │  │  WebDAV   │       │
-│  │(本地) │  │(云端) │  │  (同步)    │       │
-│  └───────┘  └───────┘  └───────────┘       │
+│        ┌───────┐        ┌───────────┐       │
+│        │ MySQL │        │  WebDAV   │       │
+│        │(主库) │        │  (备份)    │       │
+│        └───────┘        └───────────┘       │
 └────────────────────────────────────────────┘
       </div>
     </div>
@@ -449,7 +448,7 @@ TimeBlock/
         </div>
         <div class="timeline-item">
           <span class="timeline-day">第2天</span>
-          <span class="timeline-task">Electron主进程 + 本地SQLite</span>
+          <span class="timeline-task">Electron主进程 + 本地</span>
           <div class="timeline-owner">负责人：成员B</div>
         </div>
         <div class="timeline-item">
@@ -526,7 +525,7 @@ TimeBlock/
       <div class="slide-content">
         <p><strong>要做什么：</strong>跨平台时间块记录桌面应用</p>
         <p><strong>为什么做：</strong>帮助用户可视化时间分配，提升效率</p>
-        <p><strong>怎么做：</strong>Electron + Vue 3 + Node.js + SQLite + WebDAV</p>
+        <p><strong>怎么做：</strong>Electron + Vue 3 + Node.js +  + WebDAV</p>
       </div>
       
       <div class="slide-subtitle">后续计划</div>

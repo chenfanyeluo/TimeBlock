@@ -80,9 +80,8 @@
 | **前端框架** | Vue 3 + Element Plus | 现代化UI开发 |
 | **图表库** | ECharts 5.x | 数据可视化 |
 | **后端框架** | Node.js + Express | RESTful API |
-| **本地数据库** | SQLite | 离线存储 |
-| **云端数据库** | MySQL 8.0 | 用户数据云端存储 |
-| **同步协议** | WebDAV | 坚果云/NextCloud |
+| **数据库** | MySQL 8.0 | 用户数据存储 |
+| **同步协议** | WebDAV | 坚果云/NextCloud 备份 |
 | **身份认证** | JWT + bcrypt | 安全认证 |
 
 ---
