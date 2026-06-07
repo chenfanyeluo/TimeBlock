@@ -347,7 +347,8 @@ Authorization: Bearer {accessToken}
         "endTime": "2024-01-01T11:00:00Z",
         "isCompleted": false,
         "createdAt": "2024-01-01T00:00:00Z",
-        "updatedAt": "2024-01-01T00:00:00Z"
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "deletedAt": null
       }
     ],
     "pagination": {
@@ -422,6 +423,8 @@ Authorization: Bearer {accessToken}
 ### 5.5 搜索时间块
 
 **接口地址**: `GET /time-blocks/search`
+
+**说明**: 使用 MySQL FULLTEXT 全文索引进行搜索，支持中文分词（ngram parser），性能远优于 LIKE 模糊匹配。
 
 **请求头**:
 ```
@@ -541,7 +544,7 @@ Authorization: Bearer {accessToken}
 
 ---
 
-### 8.2 导入数据
+### 7.2 导入数据
 
 **接口地址**: `POST /import`
 
@@ -553,4 +556,194 @@ Content-Type: multipart/form-data
 
 **请求参数**:
 - `file`: 数据文件
+
+---
+
+## 8. 计时器模块 API
+
+> 对应数据库表：`active_timers`（每用户同时仅一个运行中的计时器）
+
+### 8.1 开始计时
+
+**接口地址**: `POST /timers/start`
+
+**请求头**:
+```
+Authorization: Bearer {accessToken}
+```
+
+**请求参数**:
+```json
+{
+  "title": "开发需求分析",
+  "categoryId": 1
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "data": {
+    "userId": 1,
+    "title": "开发需求分析",
+    "categoryId": 1,
+    "startedAt": "2024-06-07T09:30:00Z",
+    "isPaused": false,
+    "elapsedPaused": 0,
+    "createdAt": "2024-06-07T09:30:00Z"
+  }
+}
+```
+
+**业务规则**:
+- 如果该用户已有运行中的计时器，返回 `409 CONFLICT`（需先停止当前计时器）
+- `categoryId` 为可选，不传则创建无分类的计时器
+
+---
+
+### 8.2 停止计时
+
+**接口地址**: `POST /timers/stop`
+
+**请求头**:
+```
+Authorization: Bearer {accessToken}
+```
+
+**请求参数**（可选，停止时可修改最终信息）:
+```json
+{
+  "title": "开发需求分析（已完成）",
+  "categoryId": 1,
+  "description": "完成项目需求分析文档"
+}
+```
+
+**响应示例**: 返回新创建的时间块记录
+```json
+{
+  "success": true,
+  "data": {
+    "timeBlockId": 42,
+    "title": "开发需求分析（已完成）",
+    "startTime": "2024-06-07T09:30:00Z",
+    "endTime": "2024-06-07T11:15:23Z",
+    "durationSeconds": 6323,
+    "message": "已保存为时间块"
+  }
+}
+```
+
+**业务规则**:
+- 自动计算总耗时 = `(now - started_at) - elapsed_paused`
+- 将结果写入 `time_blocks` 表（start_time=started_at, end_time=now）
+- 删除 `active_timers` 中对应记录
+- 若用户无运行中的计时器，返回 `404 NOT_FOUND`
+
+---
+
+### 8.3 暂停计时
+
+**接口地址**: `POST /timers/pause`
+
+**请求头**:
+```
+Authorization: Bearer {accessToken}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "data": {
+    "isPaused": true,
+    "elapsedPaused": 600,
+    "message": "已暂停，累计暂停时长 10 分钟"
+  }
+}
+```
+
+**业务规则**:
+- 更新 `active_timers.is_paused = 1`
+- 累加本次暂停时长到 `elapsed_paused`
+- 已暂停的计时器再次调用幂等返回当前状态
+
+---
+
+### 8.4 恢复计时
+
+**接口地址**: `POST /timers/resume`
+
+**请求头**:
+```
+Authorization: Bearer {accessToken}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "data": {
+    "isPaused": false,
+    "elapsedPaused": 600,
+    "message": "已恢复计时"
+  }
+}
+```
+
+**业务规则**:
+- 设置 `active_timers.is_paused = 0`
+- 未在暂停状态时调用幂等返回当前状态
+
+---
+
+### 8.5 查询运行中计时器
+
+**接口地址**: `GET /timers/active`
+
+**请求头**:
+```
+Authorization: Bearer {accessToken}
+```
+
+**响应示例 - 有运行中的计时器**:
+```json
+{
+  "success": true,
+  "data": {
+    "userId": 1,
+    "timeBlockId": null,
+    "title": "开发需求分析",
+    "categoryId": 1,
+    "category": { "id": 1, "name": "工作", "color": "#1890ff" },
+    "startedAt": "2024-06-07T09:30:00Z",
+    "isPaused": false,
+    "elapsedPaused": 0,
+    "elapsedTotal": 3600,
+    "createdAt": "2024-06-07T09:30:00Z"
+  }
+}
+```
+
+**响应示例 - 无运行中的计时器**:
+```json
+{
+  "success": true,
+  "data": null
+}
+```
+
+**说明**:
+- `elapsedTotal` 由服务端实时计算：`(now - started_at) - elapsed_paused`（未暂停时）或直接取 `elapsed_paused`（已暂停时）
+- 此接口用于：应用启动时检查是否有需要恢复的计时器、跨设备同步计时器状态
+
+---
+
+## 9. 错误码补充
+
+| 错误码 | HTTP状态码 | 描述 | 触发场景 |
+|--------|----------|------|---------|
+| TIMER_ALREADY_RUNNING | 409 | 用户已有运行中的计时器 | 调用 POST /timers/start 时 |
+| TIMER_NOT_FOUND | 404 | 无运行中的计时器 | 调用 stop/pause/resume 时 |
 
