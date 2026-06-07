@@ -1,6 +1,6 @@
 # ⏱️ TimeBlock
 
-> 基于时间块管理法的个人时间管理工具，支持 WebDAV + 云端账号双线同步。
+> 基于时间块管理法的个人时间管理工具，支持 SQLite ↔ MySQL 双数据库同步。
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
@@ -14,8 +14,8 @@
 | 🧱 **时间块规划** | 将一天划分为可拖拽的时间块，专注一件事 |
 | ✅ **任务追踪** | 记录实际用时，对比计划 vs 执行 |
 | 📊 **日/周/月统计** | 可视化时间流向，复盘效率 |
-| 🔄 **双线同步** | WebDAV（坚果云/自建）+ 云端账号，数据双保险 |
-| 💻 **离线优先** | 本地 SQLite 存储，有网自动同步 |
+| 🔄 **双数据库同步** | SQLite（本地）↔ MySQL（云端） 直接同步 |
+| 💻 **离线优先** | 本地 SQLite 存储，有网自动同步到云端 |
 
 ---
 
@@ -38,22 +38,17 @@
 
 ## 同步方式
 
-### 方式一：WebDAV（推荐）
+### 双数据库同步：SQLite ↔ MySQL
 
-支持坚果云、NextCloud、家用NAS、自建服务器等任何标准 WebDAV 服务。
+本地数据优先，联网时自动与云端 MySQL 同步。
 
 ```
-设置 → 同步 → WebDAV
-  URL:    https://dav.jianguoyun.com/dav/
-  账号:   your@email.com
-  密码:   应用密码
+本地 SQLite（离线可用）
+    ↕ 增量同步（有网自动 / 手动触发）
+云端 MySQL（多端数据一致）
 ```
 
-### 方式二：云端账号
-
-注册账号后自动同步，换设备扫码登录即可恢复数据。
-
-> 两种模式可**同时开启**，本地数据优先，冲突时按时间戳自动合并。
+> 冲突时按时间戳自动合并，本地数据优先。
 
 ---
 

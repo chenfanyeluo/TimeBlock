@@ -29,7 +29,7 @@ rectangle "TimeBlock 系统" as System {
   usecase "月视图浏览" as UC7
   
   ' 数据同步用例
-  usecase "WebDAV同步" as UC8
+  usecase "本地云端同步" as UC8
   usecase "云端同步" as UC9
   
   ' 用户管理用例
@@ -42,7 +42,7 @@ rectangle "TimeBlock 系统" as System {
   usecase "导出数据" as UC14
   
   ' 系统设置用例
-  usecase "配置WebDAV" as UC15
+  usecase "配置同步" as UC15
   usecase "管理分类" as UC16
   usecase "主题切换" as UC17
 }
@@ -133,25 +133,25 @@ stop
 @enduml
 ```
 
-### 2.2 WebDAV同步流程
+### 2.2 SQLite↔MySQL同步流程
 
 ```plantuml
-@startuml TimeBlock_WebDAV同步
+@startuml TimeBlock_数据同步
 ' 标题
-title WebDAV同步流程 - 活动图
+title SQLite↔MySQL数据同步流程 - 活动图
 
 ' 开始节点
 start
 
-' 检查WebDAV配置
-:检查WebDAV配置;
+' 检查数据库连接
+:检查云端MySQL连接;
 
-if (配置是否有效?) then (否)
-  :提示配置错误;
-  :引导用户配置;
+if (网络是否连通?) then (否)
+  :提示网络错误;
+  :加入离线队列等待;
   stop
 else (是)
-  :配置有效;
+  :连接正常;
 endif
 
 ' 获取本地和远程数据
@@ -321,7 +321,7 @@ stop
 |----------|--------|------|
 | 用例图 | UseCase.pu | 展示系统功能范围和用户角色 |
 | 活动图-创建 | Activity_Create.pu | 时间块创建完整流程 |
-| 活动图-同步 | Activity_Sync.pu | WebDAV同步完整流程 |
+| 活动图-同步 | Activity_Sync.pu | SQLite↔MySQL同步完整流程 |
 | 活动图-登录 | Activity_Login.pu | 用户登录完整流程 |
 | 活动图-统计 | Activity_Report.pu | 统计报表生成流程 |
 
