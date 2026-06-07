@@ -1,7 +1,7 @@
 {
   "name": "timeblock-server",
   "version": "1.0.0",
-  "description": "TimeBlock 后端 API 服务 - 用户认证、时间块管理、数据统计、WebDAV 同步",
+  "description": "TimeBlock 后端 API 服务 - 用户认证、时间块管理、数据统计",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -21,8 +21,7 @@
     "morgan": "^1.10.0",
     "mysql2": "^3.9.0",
     "sequelize": "^6.37.0",
-    "sqlite3": "^5.1.0",
-    "uuid": "^9.0.0"
+    "sqlite3": "^5.1.0"
   },
   "keywords": [],
   "author": "TimeBlock Team",

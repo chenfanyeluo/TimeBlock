@@ -39,8 +39,8 @@ CREATE TABLE IF NOT EXISTS categories (
   sort_order INT NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  INDEX idx_user_id (user_id),
-  INDEX idx_sort_order (user_id, sort_order),
+  INDEX idx_categories_user_id (user_id),
+  INDEX idx_categories_sort_order (user_id, sort_order),
   CONSTRAINT fk_category_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分类表';
 
@@ -59,48 +59,9 @@ CREATE TABLE IF NOT EXISTS time_blocks (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  INDEX idx_user_id (user_id),
-  INDEX idx_category_id (category_id),
-  INDEX idx_time_range (user_id, start_time, end_time),
+  INDEX idx_timeblocks_user_id (user_id),
+  INDEX idx_timeblocks_category_id (category_id),
+  INDEX idx_timeblocks_time_range (user_id, start_time, end_time),
   CONSTRAINT fk_timeblock_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_timeblock_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='时间块表';
-
--- =============================================
--- 4. webdav_config - WebDAV配置表
--- =============================================
-CREATE TABLE IF NOT EXISTS webdav_config (
-  id BIGINT NOT NULL AUTO_INCREMENT,
-  user_id BIGINT NOT NULL,
-  server_url VARCHAR(500) NOT NULL,
-  username VARCHAR(255) NOT NULL,
-  password VARCHAR(500) NOT NULL COMMENT 'AES-256 加密',
-  last_sync_at DATETIME NULL,
-  sync_interval INT NOT NULL DEFAULT 30 COMMENT '同步间隔(分钟)',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY idx_user_id (user_id),
-  CONSTRAINT fk_webdav_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='WebDAV配置表';
-
--- =============================================
--- 5. sync_history - 同步历史表
--- =============================================
-CREATE TABLE IF NOT EXISTS sync_history (
-  id BIGINT NOT NULL AUTO_INCREMENT,
-  user_id BIGINT NOT NULL,
-  sync_id VARCHAR(100) NOT NULL,
-  status VARCHAR(20) NOT NULL COMMENT 'pending/in_progress/completed/failed',
-  started_at DATETIME NOT NULL,
-  completed_at DATETIME NULL,
-  uploaded INT NOT NULL DEFAULT 0,
-  downloaded INT NOT NULL DEFAULT 0,
-  conflicts INT NOT NULL DEFAULT 0,
-  error_message TEXT NULL,
-  PRIMARY KEY (id),
-  INDEX idx_user_id (user_id),
-  INDEX idx_sync_id (sync_id),
-  INDEX idx_created_at (user_id, started_at),
-  CONSTRAINT fk_synchistory_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='同步历史表';

@@ -6,41 +6,6 @@
 
     <div class="settings-content">
       <el-tabs type="border-card">
-        <el-tab-pane label="WebDAV 同步">
-          <el-form :model="webdavForm" label-width="120px" class="settings-form">
-            <el-form-item label="服务器地址">
-              <el-input
-                v-model="webdavForm.url"
-                placeholder="https://dav.jianguoyun.com/dav/"
-              />
-            </el-form-item>
-            <el-form-item label="用户名">
-              <el-input v-model="webdavForm.username" placeholder="请输入用户名" />
-            </el-form-item>
-            <el-form-item label="密码">
-              <el-input
-                v-model="webdavForm.password"
-                type="password"
-                placeholder="请输入密码"
-                show-password
-              />
-            </el-form-item>
-            <el-form-item label="同步间隔">
-              <el-select v-model="webdavForm.interval" placeholder="选择同步间隔">
-                <el-option label="手动同步" value="manual" />
-                <el-option label="每5分钟" value="5min" />
-                <el-option label="每15分钟" value="15min" />
-                <el-option label="每30分钟" value="30min" />
-                <el-option label="每小时" value="1hour" />
-              </el-select>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="testWebDAV">测试连接</el-button>
-              <el-button @click="saveWebDAV">保存配置</el-button>
-            </el-form-item>
-          </el-form>
-        </el-tab-pane>
-
         <el-tab-pane label="账号管理">
           <el-form :model="accountForm" label-width="120px" class="settings-form">
             <el-form-item label="当前账号">
@@ -166,13 +131,6 @@ import { useTimeBlockStore } from '@stores/timeBlock'
 
 const store = useTimeBlockStore()
 
-const webdavForm = ref({
-  url: 'https://dav.jianguoyun.com/dav/',
-  username: '',
-  password: '',
-  interval: '15min'
-})
-
 const accountForm = ref({
   email: '',
   password: ''
@@ -189,14 +147,6 @@ const timeGranularity = ref('15')
 const defaultView = ref('day')
 
 const categories = computed(() => store.categories)
-
-function testWebDAV() {
-  ElMessage.success('连接测试成功！')
-}
-
-function saveWebDAV() {
-  ElMessage.success('WebDAV 配置已保存')
-}
 
 function login() {
   isLoggedIn.value = true

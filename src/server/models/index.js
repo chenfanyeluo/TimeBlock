@@ -1,8 +1,6 @@
 const User = require('./User')
 const Category = require('./Category')
 const TimeBlock = require('./TimeBlock')
-const WebdavConfig = require('./WebdavConfig')
-const SyncHistory = require('./SyncHistory')
 
 // =============================================
 // 模型关联关系
@@ -41,32 +39,8 @@ TimeBlock.belongsTo(Category, {
   as: 'category'
 })
 
-// User ↔ WebdavConfig (一对一)
-User.hasOne(WebdavConfig, {
-  foreignKey: 'user_id',
-  as: 'webdavConfig',
-  onDelete: 'CASCADE'
-})
-WebdavConfig.belongsTo(User, {
-  foreignKey: 'user_id',
-  as: 'user'
-})
-
-// User ↔ SyncHistory (一对多)
-User.hasMany(SyncHistory, {
-  foreignKey: 'user_id',
-  as: 'syncHistories',
-  onDelete: 'CASCADE'
-})
-SyncHistory.belongsTo(User, {
-  foreignKey: 'user_id',
-  as: 'user'
-})
-
 module.exports = {
   User,
   Category,
-  TimeBlock,
-  WebdavConfig,
-  SyncHistory
+  TimeBlock
 }
