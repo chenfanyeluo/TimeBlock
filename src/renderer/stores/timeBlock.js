@@ -4,11 +4,13 @@ import dayjs from 'dayjs'
 
 export const useTimeBlockStore = defineStore('timeBlock', () => {
   const blocks = ref([
-    { id: 1, taskName: '晨会', category: 'work', startTime: '09:00', endTime: '09:30', date: dayjs().format('YYYY-MM-DD') },
-    { id: 2, taskName: '项目开发', category: 'work', startTime: '09:30', endTime: '12:00', date: dayjs().format('YYYY-MM-DD') },
-    { id: 3, taskName: '午休', category: 'rest', startTime: '12:00', endTime: '13:30', date: dayjs().format('YYYY-MM-DD') },
-    { id: 4, taskName: '代码审查', category: 'work', startTime: '14:00', endTime: '16:00', date: dayjs().format('YYYY-MM-DD') },
-    { id: 5, taskName: '学习新技术', category: 'study', startTime: '16:30', endTime: '18:00', date: dayjs().format('YYYY-MM-DD') }
+    // 单任务示例
+    { id: 1, taskName: '项目开发', categoryColor: '#00BCD4', categoryName: '工作', startTime: '01:15', endTime: '03:45', date: dayjs().format('YYYY-MM-DD') },
+    // 同一时间段多任务示例（6:00-7:00 放置两个任务）
+    { id: 2, taskName: '起床', categoryColor: '#FF9800', categoryName: '日常', startTime: '05:45', endTime: '07:15', date: dayjs().format('YYYY-MM-DD') },
+    { id: 3, taskName: '背单词', categoryColor: '#2196F3', categoryName: '学习', startTime: '05:45', endTime: '07:15', date: dayjs().format('YYYY-MM-DD') },
+    // 单任务示例
+    { id: 4, taskName: '项目开发', categoryColor: '#00BCD4', categoryName: '工作', startTime: '08:45', endTime: '09:15', date: dayjs().format('YYYY-MM-DD') }
   ])
 
   const categories = ref([
