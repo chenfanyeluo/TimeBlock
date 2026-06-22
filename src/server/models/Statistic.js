@@ -15,7 +15,7 @@ const Statistic = sequelize.define('Statistic', {
     type: DataTypes.DATEONLY,
     allowNull: false
   },
-  category_id: {
+  note_id: {
     type: DataTypes.BIGINT,
     allowNull: true,
     defaultValue: null,
@@ -38,7 +38,7 @@ const Statistic = sequelize.define('Statistic', {
   createdAt: 'created_at',
   updatedAt: false,
   indexes: [
-    { name: 'idx_stat_unique', unique: true, fields: ['user_id', 'stat_date', 'category_id'] },
+    { name: 'idx_stat_unique', unique: true, fields: ['user_id', 'stat_date', 'note_id'] },
     { name: 'idx_stat_user_date', fields: ['user_id', 'stat_date'] }
   ]
 })

@@ -1,48 +1,42 @@
-const { TimeBlock, Category } = require('../models')
+﻿const { TimeBlock, Note } = require('../models')
 const { success, error } = require('../utils/response')
 const { Op, fn, col, literal } = require('sequelize')
+const { durationInSeconds } = require('../utils/timeUtils')
 
 /**
- * 计算时间块时长（秒）
+ * 按便签聚合
  */
-function durationInSeconds(startTime, endTime) {
-  return Math.floor((new Date(endTime) - new Date(startTime)) / 1000)
-}
-
-/**
- * 按分类聚合
- */
-function aggregateByCategory(timeBlocks) {
-  const categoryMap = new Map()
+function aggregateByNote(timeBlocks) {
+  const noteMap = new Map()
   let totalDuration = 0
 
   for (const tb of timeBlocks) {
     const duration = durationInSeconds(tb.start_time, tb.end_time)
     totalDuration += duration
 
-    const catId = tb.category_id || 0
-    const catName = tb.category?.name || '未分类'
-    const color = tb.category?.color || '#909399'
+    const noteId = tb.note_id || 0
+    const noteName = tb.note?.name || '其他'
+    const color = tb.note?.color || '#909399'
 
-    if (!categoryMap.has(catId)) {
-      categoryMap.set(catId, {
-        categoryId: catId,
-        categoryName: catName,
+    if (!noteMap.has(noteId)) {
+      noteMap.set(noteId, {
+        noteId: noteId,
+        noteName: noteName,
         color,
         duration: 0
       })
     }
 
-    categoryMap.get(catId).duration += duration
+    noteMap.get(noteId).duration += duration
   }
 
   // 计算百分比
-  const categories = Array.from(categoryMap.values()).map(c => ({
-    ...c,
-    percentage: totalDuration > 0 ? Math.round((c.duration / totalDuration) * 10000) / 100 : 0
+  const notes = Array.from(noteMap.values()).map(n => ({
+    ...n,
+    percentage: totalDuration > 0 ? Math.round((n.duration / totalDuration) * 10000) / 100 : 0
   }))
 
-  return { totalDuration, categories }
+  return { totalDuration, notes }
 }
 
 /**
@@ -67,19 +61,19 @@ async function daily(req, res, next) {
         end_time: { [Op.lte]: dayEnd }
       },
       include: [{
-        model: Category,
-        as: 'category',
+        model: Note,
+        as: 'note',
         attributes: ['id', 'name', 'color']
       }],
       order: [['start_time', 'ASC']]
     })
 
-    const { totalDuration, categories } = aggregateByCategory(timeBlocks)
+    const { totalDuration, notes } = aggregateByNote(timeBlocks)
 
     return success(res, {
       date,
       totalDuration,
-      categories
+      notes
     })
 
   } catch (err) {
@@ -109,8 +103,8 @@ async function weekly(req, res, next) {
         end_time: { [Op.lte]: end }
       },
       include: [{
-        model: Category,
-        as: 'category',
+        model: Note,
+        as: 'note',
         attributes: ['id', 'name', 'color']
       }],
       order: [['start_time', 'ASC']]
@@ -131,10 +125,10 @@ async function weekly(req, res, next) {
       totalDuration
     }))
 
-    // 按分类汇总
-    const { categories } = aggregateByCategory(timeBlocks)
+    // 按便签汇总
+    const { notes } = aggregateByNote(timeBlocks)
 
-    return success(res, { days, categories })
+    return success(res, { days, notes })
 
   } catch (err) {
     next(err)
@@ -165,8 +159,8 @@ async function monthly(req, res, next) {
         end_time: { [Op.lte]: monthEnd }
       },
       include: [{
-        model: Category,
-        as: 'category',
+        model: Note,
+        as: 'note',
         attributes: ['id', 'name', 'color']
       }]
     })
@@ -192,14 +186,14 @@ async function monthly(req, res, next) {
       })
     }
 
-    const { totalDuration, categories } = aggregateByCategory(timeBlocks)
+    const { totalDuration, notes } = aggregateByNote(timeBlocks)
 
     return success(res, {
       year: y,
       month: m,
       totalDuration,
       heatmap,
-      categories
+      notes
     })
 
   } catch (err) {

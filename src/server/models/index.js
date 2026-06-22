@@ -1,5 +1,5 @@
-const User = require('./User')
-const Category = require('./Category')
+﻿const User = require('./User')
+const Note = require('./Note')
 const TimeBlock = require('./TimeBlock')
 const SyncLog = require('./SyncLog')
 const Statistic = require('./Statistic')
@@ -8,18 +8,18 @@ const Statistic = require('./Statistic')
 // 模型关联关系
 // =============================================
 
-// User ↔ Category (一对多)
-User.hasMany(Category, {
+// User  Note (一对多)
+User.hasMany(Note, {
   foreignKey: 'user_id',
-  as: 'categories',
+  as: 'notes',
   onDelete: 'CASCADE'
 })
-Category.belongsTo(User, {
+Note.belongsTo(User, {
   foreignKey: 'user_id',
   as: 'user'
 })
 
-// User ↔ TimeBlock (一对多)
+// User  TimeBlock (一对多)
 User.hasMany(TimeBlock, {
   foreignKey: 'user_id',
   as: 'timeBlocks',
@@ -30,18 +30,18 @@ TimeBlock.belongsTo(User, {
   as: 'user'
 })
 
-// Category ↔ TimeBlock (一对多)
-Category.hasMany(TimeBlock, {
-  foreignKey: 'category_id',
+// Note  TimeBlock (一对多)
+Note.hasMany(TimeBlock, {
+  foreignKey: 'note_id',
   as: 'timeBlocks',
   onDelete: 'SET NULL'
 })
-TimeBlock.belongsTo(Category, {
-  foreignKey: 'category_id',
-  as: 'category'
+TimeBlock.belongsTo(Note, {
+  foreignKey: 'note_id',
+  as: 'note'
 })
 
-// User ↔ SyncLog (一对多)
+// User  SyncLog (一对多)
 User.hasMany(SyncLog, {
   foreignKey: 'user_id',
   as: 'syncLogs',
@@ -52,7 +52,7 @@ SyncLog.belongsTo(User, {
   as: 'user'
 })
 
-// User ↔ Statistic (一对多)
+// User  Statistic (一对多)
 User.hasMany(Statistic, {
   foreignKey: 'user_id',
   as: 'statistics',
@@ -63,20 +63,20 @@ Statistic.belongsTo(User, {
   as: 'user'
 })
 
-// Category ↔ Statistic (一对多, 可选)
-Category.hasMany(Statistic, {
-  foreignKey: 'category_id',
+// Note  Statistic (一对多, 可选)
+Note.hasMany(Statistic, {
+  foreignKey: 'note_id',
   as: 'statistics',
   onDelete: 'SET NULL'
 })
-Statistic.belongsTo(Category, {
-  foreignKey: 'category_id',
-  as: 'category'
+Statistic.belongsTo(Note, {
+  foreignKey: 'note_id',
+  as: 'note'
 })
 
 module.exports = {
   User,
-  Category,
+  Note,
   TimeBlock,
   SyncLog,
   Statistic

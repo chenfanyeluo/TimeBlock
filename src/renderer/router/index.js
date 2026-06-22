@@ -1,35 +1,28 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import DayView from '@views/DayView.vue'
-import WeekView from '@views/WeekView.vue'
-import MonthView from '@views/MonthView.vue'
+import StatsView from '@views/StatsView.vue'
 import SettingsView from '@views/SettingsView.vue'
 
 const routes = [
   {
     path: '/',
-    redirect: '/day'
+    redirect: '/record'
   },
   {
-    path: '/day',
-    name: 'DayView',
+    path: '/record',
+    name: 'Record',
     component: DayView,
-    meta: { title: '日视图', icon: 'Calendar' }
+    meta: { title: '记录', icon: 'EditPen' }
   },
   {
-    path: '/week',
-    name: 'WeekView',
-    component: WeekView,
-    meta: { title: '周视图', icon: 'CalendarWeek' }
-  },
-  {
-    path: '/month',
-    name: 'MonthView',
-    component: MonthView,
-    meta: { title: '月视图', icon: 'CalendarMonth' }
+    path: '/stats',
+    name: 'Stats',
+    component: StatsView,
+    meta: { title: '统计', icon: 'DataAnalysis' }
   },
   {
     path: '/settings',
-    name: 'SettingsView',
+    name: 'Settings',
     component: SettingsView,
     meta: { title: '设置', icon: 'Setting' }
   }

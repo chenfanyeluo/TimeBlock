@@ -209,11 +209,11 @@ Authorization: Bearer {accessToken}
 
 ---
 
-## 4. 分类模块 API
+## 4. 便签模块 API
 
-### 4.1 获取分类列表
+### 4.1 获取便签列表
 
-**接口地址**: `GET /categories`
+**接口地址**: `GET /notes`
 
 **请求头**:
 ```
@@ -228,9 +228,7 @@ Authorization: Bearer {accessToken}
     {
       "id": 1,
       "name": "工作",
-      "color": "#1890ff",
-      "icon": "briefcase",
-      "sortOrder": 1,
+      "color": "#409eff",
       "createdAt": "2024-01-01T00:00:00Z"
     }
   ]
@@ -239,9 +237,9 @@ Authorization: Bearer {accessToken}
 
 ---
 
-### 4.2 创建分类
+### 4.2 创建便签
 
-**接口地址**: `POST /categories`
+**接口地址**: `POST /notes`
 
 **请求头**:
 ```
@@ -252,8 +250,7 @@ Authorization: Bearer {accessToken}
 ```json
 {
   "name": "学习",
-  "color": "#52c41a",
-  "icon": "book"
+  "color": "#67c23a"
 }
 ```
 
@@ -264,9 +261,7 @@ Authorization: Bearer {accessToken}
   "data": {
     "id": 2,
     "name": "学习",
-    "color": "#52c41a",
-    "icon": "book",
-    "sortOrder": 2,
+    "color": "#67c23a",
     "createdAt": "2024-01-01T00:00:00Z"
   }
 }
@@ -274,9 +269,9 @@ Authorization: Bearer {accessToken}
 
 ---
 
-### 4.3 更新分类
+### 4.3 更新便签
 
-**接口地址**: `PUT /categories/:id`
+**接口地址**: `PUT /notes/:id`
 
 **请求头**:
 ```
@@ -287,25 +282,22 @@ Authorization: Bearer {accessToken}
 ```json
 {
   "name": "学习",
-  "color": "#52c41a",
-  "icon": "book"
+  "color": "#67c23a"
 }
 ```
 
 ---
 
-### 4.4 删除分类
+### 4.4 删除便签
 
-**接口地址**: `DELETE /categories/:id`
+**接口地址**: `DELETE /notes/:id`
 
 **请求头**:
 ```
 Authorization: Bearer {accessToken}
 ```
 
-**查询参数**:
-- `action`: `cascade` (级联删除) 或 `transfer` (转移)
-- `transferTo`: 目标分类ID (当action为transfer时必填)
+**业务规则**: 删除便签时，关联时间块的 `note_id` 置空（不级联删除时间块）
 
 ---
 
@@ -323,7 +315,7 @@ Authorization: Bearer {accessToken}
 **查询参数**:
 - `startDate`: 开始日期 (ISO 2024-01-01)
 - `endDate`: 结束日期
-- `categoryId`: 分类ID
+- `noteId`: 便签ID
 - `page`: 页码
 - `pageSize`: 每页数量
 
@@ -337,11 +329,11 @@ Authorization: Bearer {accessToken}
         "id": 1,
         "title": "开发需求分析",
         "description": "完成项目需求分析文档",
-        "categoryId": 1,
-        "category": {
+        "noteId": 1,
+        "note": {
           "id": 1,
           "name": "工作",
-          "color": "#1890ff"
+          "color": "#409eff"
         },
         "startTime": "2024-01-01T09:00:00Z",
         "endTime": "2024-01-01T11:00:00Z",
@@ -377,7 +369,7 @@ Authorization: Bearer {accessToken}
 {
   "title": "开发需求分析",
   "description": "完成项目需求分析文档",
-  "categoryId": 1,
+  "noteId": 1,
   "startTime": "2024-01-01T09:00:00Z",
   "endTime": "2024-01-01T11:00:00Z",
   "isCompleted": false
@@ -400,7 +392,7 @@ Authorization: Bearer {accessToken}
 {
   "title": "开发需求分析",
   "description": "完成项目需求分析文档",
-  "categoryId": 1,
+  "noteId": 1,
   "startTime": "2024-01-01T09:00:00Z",
   "endTime": "2024-01-01T11:00:00Z",
   "isCompleted": true
@@ -435,7 +427,7 @@ Authorization: Bearer {accessToken}
 - `keyword`: 搜索关键词
 - `startDate`: 开始日期
 - `endDate`: 结束日期
-- `categoryId`: 分类ID
+- `noteId`: 便签ID
 
 ---
 
@@ -460,11 +452,11 @@ Authorization: Bearer {accessToken}
   "data": {
     "date": "2024-01-01",
     "totalDuration": 28800,
-    "categories": [
+    "notes": [
       {
-        "categoryId": 1,
-        "categoryName": "工作",
-        "color": "#1890ff",
+        "noteId": 1,
+        "noteName": "工作",
+        "color": "#409eff",
         "duration": 14400,
         "percentage": 50
       }
@@ -499,11 +491,11 @@ Authorization: Bearer {accessToken}
         "totalDuration": 28800
       }
     ],
-    "categories": [
+    "notes": [
       {
-        "categoryId": 1,
-        "categoryName": "工作",
-        "color": "#1890ff",
+        "noteId": 1,
+        "noteName": "工作",
+        "color": "#409eff",
         "totalDuration": 72000
       }
     ]
@@ -576,7 +568,7 @@ Authorization: Bearer {accessToken}
 ```json
 {
   "title": "开发需求分析",
-  "categoryId": 1
+  "noteId": 1
 }
 ```
 
@@ -587,7 +579,7 @@ Authorization: Bearer {accessToken}
   "data": {
     "userId": 1,
     "title": "开发需求分析",
-    "categoryId": 1,
+    "noteId": 1,
     "startedAt": "2024-06-07T09:30:00Z",
     "isPaused": false,
     "elapsedPaused": 0,
@@ -598,7 +590,7 @@ Authorization: Bearer {accessToken}
 
 **业务规则**:
 - 如果该用户已有运行中的计时器，返回 `409 CONFLICT`（需先停止当前计时器）
-- `categoryId` 为可选，不传则创建无分类的计时器
+- `noteId` 为可选，不传则创建无便签的计时器
 
 ---
 
@@ -615,7 +607,7 @@ Authorization: Bearer {accessToken}
 ```json
 {
   "title": "开发需求分析（已完成）",
-  "categoryId": 1,
+  "noteId": 1,
   "description": "完成项目需求分析文档"
 }
 ```
@@ -715,8 +707,8 @@ Authorization: Bearer {accessToken}
     "userId": 1,
     "timeBlockId": null,
     "title": "开发需求分析",
-    "categoryId": 1,
-    "category": { "id": 1, "name": "工作", "color": "#1890ff" },
+    "noteId": 1,
+    "note": { "id": 1, "name": "工作", "color": "#409eff" },
     "startedAt": "2024-06-07T09:30:00Z",
     "isPaused": false,
     "elapsedPaused": 0,

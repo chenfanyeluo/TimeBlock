@@ -11,7 +11,7 @@ const TimeBlock = sequelize.define('TimeBlock', {
     type: DataTypes.BIGINT,
     allowNull: false
   },
-  category_id: {
+  note_id: {
     type: DataTypes.BIGINT,
     allowNull: true,
     defaultValue: null
@@ -64,8 +64,8 @@ const TimeBlock = sequelize.define('TimeBlock', {
       fields: ['user_id']
     },
     {
-      name: 'idx_timeblocks_category_id',
-      fields: ['category_id']
+      name: 'idx_timeblocks_note_id',
+      fields: ['note_id']
     },
     {
       name: 'idx_timeblocks_time_range',

@@ -6,7 +6,8 @@
 
     <div class="settings-content">
       <el-tabs type="border-card">
-        <el-tab-pane label="数据同步">
+        <el-tab-pane label="数据与同步">
+          <!-- 同步设置 -->
           <div class="sync-info">
             <el-alert title="双数据库同步方案" type="info" :closable="false" show-icon>
               <template #default>
@@ -52,6 +53,37 @@
               </el-col>
             </el-row>
           </div>
+
+          <!-- 分割线 -->
+          <el-divider />
+
+          <!-- 数据管理 -->
+          <div class="data-actions">
+            <el-card class="action-card">
+              <template #header>数据导出</template>
+              <p class="action-desc">将所有时间块数据导出为 JSON 文件</p>
+              <el-button type="primary" :icon="Download" @click="exportData">导出数据</el-button>
+            </el-card>
+
+            <el-card class="action-card">
+              <template #header>数据导入</template>
+              <p class="action-desc">从 JSON 文件导入时间块数据</p>
+              <el-upload
+                action="#"
+                :auto-upload="false"
+                :on-change="handleImport"
+                accept=".json"
+              >
+                <el-button type="primary" :icon="Upload">导入数据</el-button>
+              </el-upload>
+            </el-card>
+
+            <el-card class="action-card danger">
+              <template #header>清除数据</template>
+              <p class="action-desc">清除所有本地数据，此操作不可恢复</p>
+              <el-button type="danger" :icon="Delete" @click="clearAllData">清除所有数据</el-button>
+            </el-card>
+          </div>
         </el-tab-pane>
 
         <el-tab-pane label="账号管理">
@@ -91,36 +123,29 @@
           </el-form>
         </el-tab-pane>
 
-        <el-tab-pane label="分类管理">
+        <el-tab-pane label="便签管理">
           <div class="category-list">
             <div
-              v-for="cat in categories"
-              :key="cat.id"
+              v-for="note in notes"
+              :key="note.id"
               class="category-item"
             >
-              <el-color-picker v-model="cat.color" size="small" />
-              <el-input v-model="cat.name" size="small" class="category-name-input" />
+              <el-color-picker v-model="note.color" size="small" />
+              <el-input v-model="note.name" size="small" class="category-name-input" />
               <el-button
                 type="danger"
                 size="small"
                 :icon="Delete"
                 circle
-                @click="deleteCategory(cat.id)"
+                @click="deleteNote(note.id)"
               />
             </div>
-            <el-button type="primary" :icon="Plus" @click="addCategory">添加分类</el-button>
+            <el-button type="primary" :icon="Plus" @click="addNote">添加便签</el-button>
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="外观设置">
+        <el-tab-pane label="通用设置">
           <el-form label-width="120px" class="settings-form">
-            <el-form-item label="主题">
-              <el-radio-group v-model="theme">
-                <el-radio-button label="light">浅色</el-radio-button>
-                <el-radio-button label="dark">深色</el-radio-button>
-                <el-radio-button label="auto">跟随系统</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
             <el-form-item label="时间粒度">
               <el-radio-group v-model="timeGranularity">
                 <el-radio-button label="5">5分钟</el-radio-button>
@@ -130,42 +155,51 @@
             </el-form-item>
             <el-form-item label="默认视图">
               <el-radio-group v-model="defaultView">
-                <el-radio-button label="day">日视图</el-radio-button>
-                <el-radio-button label="week">周视图</el-radio-button>
-                <el-radio-button label="month">月视图</el-radio-button>
+                <el-radio-button label="record">记录</el-radio-button>
+                <el-radio-button label="stats">统计</el-radio-button>
               </el-radio-group>
             </el-form-item>
           </el-form>
         </el-tab-pane>
 
-        <el-tab-pane label="数据管理">
-          <div class="data-actions">
-            <el-card class="action-card">
-              <template #header>数据导出</template>
-              <p class="action-desc">将所有时间块数据导出为 JSON 文件</p>
-              <el-button type="primary" :icon="Download" @click="exportData">导出数据</el-button>
-            </el-card>
-
-            <el-card class="action-card">
-              <template #header>数据导入</template>
-              <p class="action-desc">从 JSON 文件导入时间块数据</p>
-              <el-upload
-                action="#"
-                :auto-upload="false"
-                :on-change="handleImport"
-                accept=".json"
-              >
-                <el-button type="primary" :icon="Upload">导入数据</el-button>
-              </el-upload>
-            </el-card>
-
-            <el-card class="action-card danger">
-              <template #header>清除数据</template>
-              <p class="action-desc">清除所有本地数据，此操作不可恢复</p>
-              <el-button type="danger" :icon="Delete" @click="clearAllData">清除所有数据</el-button>
-            </el-card>
-          </div>
+        <el-tab-pane label="外观设置">
+          <el-form label-width="120px" class="settings-form">
+            <el-form-item label="主题">
+              <div class="theme-picker">
+                <div
+                  v-for="t in themeOptions"
+                  :key="t.value"
+                  class="theme-option"
+                  :class="{ active: store.theme === t.value }"
+                  @click="handleThemeChange(t.value)"
+                >
+                  <div class="theme-preview">
+                    <span class="preview-sidebar" :style="{ background: t.preview.sidebar }"></span>
+                    <div class="preview-content">
+                      <div class="preview-header" :style="{ background: t.preview.header, borderColor: t.preview.border }"></div>
+                      <div class="preview-body" :style="{ background: t.preview.body }">
+                        <div class="preview-line short" :style="{ background: t.preview.line }"></div>
+                        <div class="preview-line mid" :style="{ background: t.preview.lineLight }"></div>
+                        <div class="preview-line long" :style="{ background: t.preview.lineDim }"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <span class="theme-name">{{ t.label }}</span>
+                </div>
+              </div>
+            </el-form-item>
+            <el-form-item label="UI 动画效果">
+              <el-switch
+                v-model="animationEnabled"
+                active-text="开启"
+                inactive-text="关闭"
+                @change="handleAnimationChange"
+              />
+              <span class="setting-hint">开启后全局 UI 将使用平滑过渡动画，关闭可提升性能</span>
+            </el-form-item>
+          </el-form>
         </el-tab-pane>
+
       </el-tabs>
     </div>
   </div>
@@ -203,11 +237,68 @@ const userInfo = ref({
 })
 
 const isLoggedIn = ref(false)
-const theme = ref('light')
 const timeGranularity = ref('15')
-const defaultView = ref('day')
+const defaultView = ref('record')
 
-const categories = computed(() => store.categories)
+// 主题选项（含预览色）
+const themeOptions = [
+  {
+    value: 'light',
+    label: '浅色',
+    preview: { sidebar: '#304156', header: '#fff', body: '#f5f7fa', border: '#e4e7ed', line: '#303133', lineLight: '#606266', lineDim: '#c0c4cc' }
+  },
+  {
+    value: 'dark',
+    label: '深色',
+    preview: { sidebar: '#1a1a2e', header: '#1f1f1f', body: '#141414', border: '#434343', line: '#e0e0e0', lineLight: '#b0b0b0', lineDim: '#555555' }
+  },
+  {
+    value: 'green',
+    label: '护眼绿',
+    preview: { sidebar: '#2d5038', header: '#f7fbf7', body: '#f0f5f0', border: '#cce0d0', line: '#1a3320', lineLight: '#3d5c46', lineDim: '#8aa894' }
+  },
+  {
+    value: 'warm',
+    label: '暖色',
+    preview: { sidebar: '#6b5344', header: '#fdfbf7', body: '#faf6f0', border: '#e8ded2', line: '#3d3027', lineLight: '#5c4d41', lineDim: '#b0a498' }
+  },
+  {
+    value: 'blue',
+    label: '深蓝',
+    preview: { sidebar: '#0d1f38', header: '#132240', body: '#0a1628', border: '#1e3a5f', line: '#c9d6df', lineLight: '#98a8b8', lineDim: '#4a6580' }
+  },
+  {
+    value: 'contrast',
+    label: '高对比',
+    preview: { sidebar: '#000000', header: '#ffffff', body: '#ffffff', border: '#000000', line: '#000000', lineLight: '#333333', lineDim: '#777777' }
+  },
+  {
+    value: 'auto',
+    label: '跟随系统',
+    preview: { sidebar: '#606266', header: '#fff', body: '#f5f7fa', border: '#e4e7ed', line: '#303133', lineLight: '#909399', lineDim: '#c0c4cc' }
+  }
+]
+
+const themeLabels = Object.fromEntries(themeOptions.map(t => [t.value, t.label]))
+
+// 主题切换（通过 store.setTheme 写回 + 持久化）
+function handleThemeChange(val) {
+  store.setTheme(val)
+  ElMessage.success(`主题已切换为：${themeLabels[val] || val}`)
+}
+
+// 动画开关（从 store 读取）
+const animationEnabled = computed({
+  get: () => store.animationEnabled,
+  set: (val) => store.setAnimationEnabled(val)
+})
+
+function handleAnimationChange(val) {
+  store.setAnimationEnabled(val)
+  ElMessage.success(val ? 'UI 动画已开启' : 'UI 动画已关闭（性能模式）')
+}
+
+const notes = computed(() => store.notes)
 
 // 数据同步方法
 function syncNow() {
@@ -246,19 +337,19 @@ function updateProfile() {
   ElMessage.success('资料已更新')
 }
 
-function addCategory() {
-  const id = `custom-${Date.now()}`
-  store.categories.push({
+function addNote() {
+  const id = `note-${Date.now()}`
+  store.notes.push({
     id,
-    name: '新分类',
+    name: '新便签',
     color: '#909399'
   })
 }
 
-function deleteCategory(id) {
-  const idx = store.categories.findIndex(c => c.id === id)
+function deleteNote(id) {
+  const idx = store.notes.findIndex(n => n.id === id)
   if (idx !== -1) {
-    store.categories.splice(idx, 1)
+    store.notes.splice(idx, 1)
   }
 }
 
@@ -313,7 +404,7 @@ function clearAllData() {
 .sync-stats {
   padding: 20px;
   margin-top: 10px;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   border-radius: 8px;
 }
 
@@ -360,5 +451,97 @@ function clearAllData() {
 
 .text-secondary {
   color: var(--text-secondary);
+}
+
+.setting-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+// ---- 主题选择器 ----
+.theme-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 520px;
+
+  .theme-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background: transparent;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--bg-hover-soft);
+      border-color: var(--border-light);
+    }
+
+    &.active {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.15);
+
+      .theme-name { color: var(--primary-color); font-weight: 600; }
+    }
+  }
+
+  .theme-preview {
+    width: 72px;
+    height: 48px;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    border: 1px solid var(--border-lighter);
+
+    .preview-sidebar {
+      width: 16px;
+      height: 100%;
+      flex-shrink: 0;
+    }
+
+    .preview-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+
+      .preview-header {
+        height: 10px;
+        width: 100%;
+        border-bottom: 1px solid #ddd;
+        flex-shrink: 0;
+      }
+
+      .preview-body {
+        flex: 1;
+        padding: 5px 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+    }
+  }
+
+  .preview-line {
+    height: 3px;
+    border-radius: 1.5px;
+    &.short { width: 60%; }
+    &.mid { width: 80%; }
+    &.long { width: 45%; }
+  }
+
+  .theme-name {
+    font-size: 12px;
+    color: var(--text-regular);
+    transition: color 0.2s ease;
+  }
 }
 </style>

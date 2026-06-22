@@ -95,11 +95,14 @@ const resizeDeltaY = ref(0)     // resize 高度变化量
 const snapshotStartMin = ref(0)
 const snapshotEndMin = ref(0)
 
-// 使用 block 自带的颜色
-const categoryColor = computed(() => props.block.categoryColor || store.getCategoryColor(props.block.category))
+// 使用 block 自带的颜色/名称（统一 noteXxx 字段）
+const categoryColor = computed(() =>
+  props.block.noteColor ||
+  store.getNoteColor(props.block.noteId)
+)
 const categoryName = computed(() => {
-  if (props.block.categoryName) return props.block.categoryName
-  return store.getCategoryName(props.block.category)
+  if (props.block.noteName) return props.block.noteName
+  return store.getNoteName(props.block.noteId)
 })
 
 // 块高度 < 35px 时使用紧凑模式（保证小任务也能看清名称）
@@ -361,7 +364,7 @@ function onResizeEnd() {
   }
 
   &.selected {
-    outline: 2px solid #409eff;
+    outline: 2px solid var(--primary-color);
     outline-offset: -1px;
     box-shadow: 0 4px 16px rgba(64, 158, 255, 0.25);
   }
@@ -378,14 +381,14 @@ function onResizeEnd() {
 
   &.will-recycle {
     opacity: 0.5;
-    border-left-color: #67c23a;
+    border-left-color: var(--success-color);
 
     .drag-time-tooltip {
-      background: #67c23a;
+      background: var(--success-color);
     }
 
     .drag-time-tooltip::after {
-      border-top-color: #67c23a;
+      border-top-color: var(--success-color);
     }
   }
 
@@ -429,7 +432,7 @@ function onResizeEnd() {
 
   .compact-note-inline {
     font-size: 10px;
-    color: #909399;
+    color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -439,7 +442,7 @@ function onResizeEnd() {
 
   .category-badge {
     font-size: 8px;
-    color: #fff;
+    color: var(--text-on-primary);
     padding: 0 4px;
     border-radius: 6px;
     white-space: nowrap;
@@ -463,7 +466,7 @@ function onResizeEnd() {
 
   .category-badge {
     font-size: 10px;
-    color: #fff;
+    color: var(--text-on-primary);
     padding: 1px 7px;
     border-radius: 8px;
     white-space: nowrap;
@@ -482,7 +485,7 @@ function onResizeEnd() {
 
 .block-note {
   font-size: 11px;
-  color: #909399;
+  color: var(--text-secondary);
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -494,12 +497,12 @@ function onResizeEnd() {
 
   :deep(.el-input__wrapper) {
     padding: 0 6px;
-    box-shadow: 0 0 0 1px #c0c4cc inset;
+    box-shadow: 0 0 0 1px var(--border-color) inset;
     border-radius: 4px;
     font-size: 11px;
 
     &.is-focus {
-      box-shadow: 0 0 0 1px #409eff inset;
+      box-shadow: 0 0 0 1px var(--primary-color) inset;
     }
   }
 
@@ -530,8 +533,8 @@ function onResizeEnd() {
   top: -28px;
   left: 50%;
   transform: translateX(-50%);
-  background: #303133;
-  color: #fff;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-color);
   font-size: 11px;
   padding: 2px 10px;
   border-radius: 4px;
@@ -549,7 +552,7 @@ function onResizeEnd() {
     height: 0;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
-    border-top: 5px solid #303133;
+    border-top: 5px solid var(--tooltip-bg);
   }
 }
 </style>

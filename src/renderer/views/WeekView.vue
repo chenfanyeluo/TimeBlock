@@ -1,16 +1,17 @@
 <template>
-  <div class="view-container">
-    <div class="view-header">
-      <h2>周视图</h2>
-      <div class="date-nav">
-        <el-button @click="prevWeek" :icon="ArrowLeft" circle />
-        <span class="current-date">{{ weekRange }}</span>
-        <el-button @click="nextWeek" :icon="ArrowRight" circle />
-        <el-button type="primary" @click="goToday">本周</el-button>
+  <div class="week-view-content">
+    <!-- 周导航 -->
+    <div class="week-toolbar">
+      <div class="week-nav">
+        <el-button @click="prevWeek" :icon="ArrowLeft" circle size="small" />
+        <span class="current-week">{{ weekRange }}</span>
+        <el-button @click="nextWeek" :icon="ArrowRight" circle size="small" />
+        <el-button type="primary" size="small" @click="goToday">本周</el-button>
       </div>
     </div>
 
-    <div class="week-view-content">
+    <!-- 周网格内容区 -->
+    <div class="week-grid-card">
       <div class="week-header">
         <div class="time-column-header"></div>
         <div
@@ -62,7 +63,7 @@ import { useTimeBlockStore } from '@stores/timeBlock'
 dayjs.locale('zh-cn')
 
 const store = useTimeBlockStore()
-const currentWeekStart = ref(dayjs().startOf('week').add(1, 'day'))
+const currentWeekStart = ref(dayjs().startOf('isoWeek'))
 const hourHeight = 50
 
 const weekRange = computed(() => {
@@ -101,7 +102,7 @@ function nextWeek() {
 }
 
 function goToday() {
-  currentWeekStart.value = dayjs().startOf('week').add(1, 'day')
+  currentWeekStart.value = dayjs().startOf('isoWeek')
 }
 
 function updateBlock(id, updates) {
@@ -110,10 +111,38 @@ function updateBlock(id, updates) {
 </script>
 
 <style lang="scss" scoped>
+// ---- 外层容器（与 MonthView / YearView 统一） ----
 .week-view-content {
   display: flex;
   flex-direction: column;
-  height: calc(100% - 60px);
+  gap: 20px;
+  min-height: 0;
+  overflow: auto;
+}
+
+// ---- 周导航工具栏（与 MonthView / YearView 统一） ----
+.week-toolbar {
+  display: flex;
+  align-items: center;
+}
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  .current-week {
+    font-size: 16px;
+    font-weight: 600;
+    min-width: 180px;
+    text-align: center;
+  }
+}
+
+// ---- 周网格卡片（类似 MonthView 的 calendar-card） ----
+.week-grid-card {
+  display: flex;
+  flex-direction: column;
   background: var(--bg-secondary);
   border-radius: 8px;
   overflow: hidden;
@@ -160,8 +189,6 @@ function updateBlock(id, updates) {
 
 .week-body {
   display: flex;
-  flex: 1;
-  overflow: auto;
 }
 
 .time-column {
@@ -193,19 +220,6 @@ function updateBlock(id, updates) {
 
   &:hover {
     background: var(--bg-hover);
-  }
-}
-
-.date-nav {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-
-  .current-date {
-    font-size: 16px;
-    font-weight: 500;
-    min-width: 200px;
-    text-align: center;
   }
 }
 </style>

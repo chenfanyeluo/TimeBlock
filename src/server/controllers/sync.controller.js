@@ -1,7 +1,8 @@
-const { SyncLog, Statistic } = require('../models')
-const { TimeBlock, Category } = require('../models')
+﻿const { SyncLog, Statistic } = require('../models')
+const { TimeBlock, Note } = require('../models')
 const { success, error } = require('../utils/response')
 const { Op } = require('sequelize')
+const { durationInSeconds } = require('../utils/timeUtils')
 
 /**
  * POST /api/sync/upload
@@ -22,16 +23,14 @@ async function upload(req, res, next) {
     })
 
     try {
-      // 上传分类变更
-      if (changes.categories && changes.categories.length > 0) {
-        for (const cat of changes.categories) {
-          const [category] = await Category.upsert({
-            id: cat.id,
+      // 上传便签变更
+      if (changes.notes && changes.notes.length > 0) {
+        for (const noteData of changes.notes) {
+          await Note.upsert({
+            id: noteData.id,
             user_id: userId,
-            name: cat.name,
-            color: cat.color,
-            icon: cat.icon,
-            sort_order: cat.sortOrder
+            name: noteData.name,
+            color: noteData.color
           })
           synced++
         }
@@ -40,10 +39,10 @@ async function upload(req, res, next) {
       // 上传时间块变更
       if (changes.timeBlocks && changes.timeBlocks.length > 0) {
         for (const tb of changes.timeBlocks) {
-          const [timeBlock] = await TimeBlock.upsert({
+          await TimeBlock.upsert({
             id: tb.id,
             user_id: userId,
-            category_id: tb.categoryId,
+            note_id: tb.noteId,
             title: tb.title,
             description: tb.description,
             start_time: tb.startTime,
@@ -97,34 +96,32 @@ async function download(req, res, next) {
     }
 
     // 获取自上次同步以来的变更
-    const [categories, timeBlocks] = await Promise.all([
-      Category.findAll({
+    const [notes, timeBlocks] = await Promise.all([
+      Note.findAll({
         where: lastSyncAt ? { user_id: userId } : { user_id: userId }
       }),
       TimeBlock.findAll({
         where: whereClause,
-        include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'color'] }]
+        include: [{ model: Note, as: 'note', attributes: ['id', 'name', 'color'] }]
       })
     ])
 
     const data = {
       serverTime: new Date().toISOString(),
-      categories: categories.map(c => ({
-        id: c.id,
-        name: c.name,
-        color: c.color,
-        icon: c.icon,
-        sortOrder: c.sort_order
+      notes: notes.map(n => ({
+        id: n.id,
+        name: n.name,
+        color: n.color
       })),
       timeBlocks: timeBlocks.map(tb => ({
         id: tb.id,
         title: tb.title,
         description: tb.description,
-        categoryId: tb.category_id,
-        category: tb.category ? {
-          id: tb.category.id,
-          name: tb.category.name,
-          color: tb.category.color
+        noteId: tb.note_id,
+        note: tb.note ? {
+          id: tb.note.id,
+          name: tb.note.name,
+          color: tb.note.color
         } : null,
         startTime: tb.start_time,
         endTime: tb.end_time,
@@ -235,21 +232,21 @@ async function refreshStatistics(req, res, next) {
       }
     })
 
-    // 按分类汇总
-    const categoryStats = new Map()
+    // 按便签汇总
+    const noteStats = new Map()
     let totalSeconds = 0
     let totalBlocks = 0
 
     for (const tb of timeBlocks) {
-      const duration = Math.floor((new Date(tb.end_time) - new Date(tb.start_time)) / 1000)
-      const catId = tb.category_id || 0
+      const duration = durationInSeconds(tb.start_time, tb.end_time)
+      const noteId = tb.note_id || 0
       totalSeconds += duration
       totalBlocks++
 
-      if (!categoryStats.has(catId)) {
-        categoryStats.set(catId, { seconds: 0, count: 0 })
+      if (!noteStats.has(noteId)) {
+        noteStats.set(noteId, { seconds: 0, count: 0 })
       }
-      const stat = categoryStats.get(catId)
+      const stat = noteStats.get(noteId)
       stat.seconds += duration
       stat.count++
     }
@@ -258,16 +255,16 @@ async function refreshStatistics(req, res, next) {
     await Statistic.upsert({
       user_id: userId,
       stat_date: targetDate,
-      category_id: null,
+      note_id: null,
       total_seconds: totalSeconds,
       block_count: totalBlocks
     })
 
-    for (const [catId, stat] of categoryStats) {
+    for (const [noteId, stat] of noteStats) {
       await Statistic.upsert({
         user_id: userId,
         stat_date: targetDate,
-        category_id: catId === 0 ? null : catId,
+        note_id: noteId === 0 ? null : noteId,
         total_seconds: stat.seconds,
         block_count: stat.count
       })
@@ -275,7 +272,7 @@ async function refreshStatistics(req, res, next) {
 
     return success(res, {
       date: targetDate,
-      totalCategories: categoryStats.size,
+      totalNotes: noteStats.size,
       totalSeconds
     }, '统计数据已刷新')
 

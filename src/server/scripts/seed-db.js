@@ -2,13 +2,13 @@
  * 数据库种子数据脚本
  * 用法: node scripts/seed-db.js
  *
- * 创建默认分类和测试数据
+ * 创建默认便签和测试数据
  */
 const path = require('path')
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 
 const sequelize = require('../config/database')
-const { User, Category, TimeBlock } = require('../models')
+const { User, Note, TimeBlock } = require('../models')
 const bcrypt = require('bcryptjs')
 
 async function seed() {
@@ -33,41 +33,42 @@ async function seed() {
     })
     console.log(`✅ 创建测试用户: demo@timeblock.com / 123456`)
 
-    // 默认分类
-    const defaultCategories = [
-      { name: '工作', color: '#1890ff', icon: 'briefcase', sort_order: 1 },
-      { name: '学习', color: '#52c41a', icon: 'book', sort_order: 2 },
-      { name: '生活', color: '#faad14', icon: 'home', sort_order: 3 },
-      { name: '休息', color: '#f5222d', icon: 'coffee', sort_order: 4 },
-      { name: '运动', color: '#9254de', icon: 'run', sort_order: 5 }
+    // 默认便签（颜色与前端 store.notes 保持一致）
+    const defaultNotes = [
+      { name: '工作', color: '#409eff' },
+      { name: '学习', color: '#67c23a' },
+      { name: '休息', color: '#e6a23c' },
+      { name: '运动', color: '#f56c6c' },
+      { name: '生活', color: '#9254de' },
+      { name: '其他', color: '#909399' }
     ]
 
-    const categories = []
-    for (const cat of defaultCategories) {
-      const c = await Category.create({
+    const notes = []
+    for (const note of defaultNotes) {
+      const n = await Note.create({
         user_id: user.id,
-        ...cat
+        ...note
       })
-      categories.push(c)
+      notes.push(n)
     }
-    console.log(`✅ 创建 ${categories.length} 个默认分类`)
+    console.log(`✅ 创建 ${notes.length} 个默认便签`)
 
     // 示例时间块
     const today = new Date().toISOString().split('T')[0]
     const demoBlocks = [
-      { title: '晨间规划', categoryId: categories[0].id, start: '07:00', end: '07:30' },
-      { title: '深度开发', categoryId: categories[0].id, start: '08:00', end: '11:00' },
-      { title: '学习新技术', categoryId: categories[1].id, start: '11:00', end: '12:00' },
-      { title: '午饭休息', categoryId: categories[3].id, start: '12:00', end: '13:30' },
-      { title: '代码审查', categoryId: categories[0].id, start: '14:00', end: '16:00' },
-      { title: '运动健身', categoryId: categories[4].id, start: '17:00', end: '18:00' },
-      { title: '家庭晚餐', categoryId: categories[2].id, start: '19:00', end: '20:00' }
+      { title: '晨间规划', noteId: notes[0].id, start: '07:00', end: '07:30' },
+      { title: '深度开发', noteId: notes[0].id, start: '08:00', end: '11:00' },
+      { title: '学习新技术', noteId: notes[1].id, start: '11:00', end: '12:00' },
+      { title: '午饭休息', noteId: notes[2].id, start: '12:00', end: '13:30' },
+      { title: '代码审查', noteId: notes[0].id, start: '14:00', end: '16:00' },
+      { title: '运动健身', noteId: notes[3].id, start: '17:00', end: '18:00' },
+      { title: '家庭晚餐', noteId: notes[4].id, start: '19:00', end: '20:00' }
     ]
 
     for (const block of demoBlocks) {
       await TimeBlock.create({
         user_id: user.id,
-        category_id: block.categoryId,
+        note_id: block.noteId,
         title: block.title,
         start_time: new Date(`${today}T${block.start}:00`),
         end_time: new Date(`${today}T${block.end}:00`),

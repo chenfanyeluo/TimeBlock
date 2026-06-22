@@ -43,7 +43,7 @@ rectangle "TimeBlock 系统" as System {
   
   ' 系统设置用例
   usecase "配置同步" as UC15
-  usecase "管理分类" as UC16
+  usecase "管理便签" as UC16
   usecase "主题切换" as UC17
 }
 
@@ -99,7 +99,7 @@ start
 
 ' 输入任务信息
 :输入任务名称;
-:选择分类;
+:选择便签;
 
 ' 验证时间是否冲突
 if (时间是否冲突?) then (是)
@@ -267,7 +267,7 @@ else (是)
 endif
 
 ' 数据处理
-:按分类统计时长;
+:按便签统计时长;
 :计算占比;
 
 ' 生成图表

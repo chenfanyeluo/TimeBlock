@@ -1,4 +1,4 @@
-const { TimeBlock, Category } = require('../models')
+﻿const { TimeBlock, Note } = require('../models')
 const { success, error } = require('../utils/response')
 
 /**
@@ -10,11 +10,11 @@ async function exportData(req, res, next) {
     const { format = 'json' } = req.query
 
     // 查询用户所有数据
-    const [categories, timeBlocks] = await Promise.all([
-      Category.findAll({ where: { user_id: req.user.id } }),
+    const [notes, timeBlocks] = await Promise.all([
+      Note.findAll({ where: { user_id: req.user.id } }),
       TimeBlock.findAll({
         where: { user_id: req.user.id },
-        include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'color'] }]
+        include: [{ model: Note, as: 'note', attributes: ['id', 'name', 'color'] }]
       })
     ])
 
@@ -22,16 +22,14 @@ async function exportData(req, res, next) {
       version: '1.0',
       exportedAt: new Date().toISOString(),
       userId: req.user.id,
-      categories: categories.map(c => ({
-        name: c.name,
-        color: c.color,
-        icon: c.icon,
-        sortOrder: c.sort_order
+      notes: notes.map(n => ({
+        name: n.name,
+        color: n.color
       })),
       timeBlocks: timeBlocks.map(tb => ({
         title: tb.title,
         description: tb.description,
-        categoryName: tb.category?.name || null,
+        noteName: tb.note?.name || null,
         startTime: tb.start_time,
         endTime: tb.end_time,
         isCompleted: tb.is_completed
@@ -68,26 +66,26 @@ async function importData(req, res, next) {
 
     for (const block of importPayload.timeBlocks) {
       try {
-        // 查找或创建匹配的分类
-        let categoryId = null
-        if (block.categoryName) {
-          const [category] = await Category.findOrCreate({
+        // 查找或创建匹配的便签
+        let noteId = null
+        if (block.noteName) {
+          const [note] = await Note.findOrCreate({
             where: {
               user_id: req.user.id,
-              name: block.categoryName
+              name: block.noteName
             },
             defaults: {
               user_id: req.user.id,
-              name: block.categoryName,
-              color: '#1890ff'
+              name: block.noteName,
+              color: '#409eff'
             }
           })
-          categoryId = category.id
+          noteId = note.id
         }
 
         await TimeBlock.create({
           user_id: req.user.id,
-          category_id: categoryId,
+          note_id: noteId,
           title: block.title || '未命名',
           description: block.description || null,
           start_time: new Date(block.startTime),

@@ -1,0 +1,290 @@
+// ================================================================
+// 主题变量 Mixin
+// el-theme-vars:  亮色系主题复用（green/warm/contrast）
+// el-dark-vars:   暗色系主题复用（dark/blue）
+// ================================================================
+
+@mixin el-theme-vars(
+  $bg-primary,
+  $bg-secondary,
+  $bg-sidebar,
+  $bg-hover,
+  $bg-tertiary,
+  $bg-hover-soft,
+  $text-primary,
+  $text-regular,
+  $text-secondary,
+  $text-placeholder,
+  $border-color,
+  $border-light,
+  $border-lighter,
+  $sidebar-text,
+  $sidebar-border,
+  $drag-over-bg,
+  $drag-over-bg-strong,
+  $danger-light,
+  $primary-light,
+  $tooltip-bg,
+  $tooltip-color,
+  $heat-empty-bg,
+  $chart-border,
+  $chart-label-color,
+  $text-on-primary,
+  $shadow-sm,
+  $shadow-lg
+) {
+  /* ---- EP 主色系 light 变体 ---- */
+  --el-color-primary-light-3: rgba(64, 158, 255, 0.22);
+  --el-color-primary-light-5: rgba(64, 158, 255, 0.12);
+  --el-color-primary-light-7: rgba(64, 158, 255, 0.08);
+  --el-color-primary-light-8: rgba(64, 158, 255, 0.05);
+  --el-color-primary-light-9: rgba(64, 158, 255, 0.03);
+  --el-color-primary-dark-2: #337ecc;
+
+  --el-color-success-light-3: rgba(103, 194, 58, 0.22);
+  --el-color-success-light-5: rgba(103, 194, 58, 0.12);
+  --el-color-success-light-7: rgba(103, 194, 58, 0.08);
+  --el-color-success-light-8: rgba(103, 194, 58, 0.05);
+  --el-color-success-light-9: rgba(103, 194, 58, 0.03);
+
+  --el-color-warning-light-3: rgba(230, 162, 60, 0.22);
+  --el-color-warning-light-5: rgba(230, 162, 60, 0.12);
+  --el-color-warning-light-7: rgba(230, 162, 60, 0.08);
+  --el-color-warning-light-8: rgba(230, 162, 60, 0.05);
+  --el-color-warning-light-9: rgba(230, 162, 60, 0.03);
+
+  --el-color-danger-light-3: rgba(245, 108, 108, 0.22);
+  --el-color-danger-light-5: rgba(245, 108, 108, 0.12);
+  --el-color-danger-light-7: rgba(245, 108, 108, 0.08);
+  --el-color-danger-light-8: rgba(245, 108, 108, 0.05);
+  --el-color-danger-light-9: rgba(245, 108, 108, 0.03);
+
+  --el-color-info-light-3: rgba(144, 147, 153, 0.22);
+  --el-color-info-light-5: rgba(144, 147, 153, 0.12);
+  --el-color-info-light-7: rgba(144, 147, 153, 0.08);
+  --el-color-info-light-8: rgba(144, 147, 153, 0.05);
+  --el-color-info-light-9: rgba(144, 147, 153, 0.03);
+
+  /* ---- EP 背景色 ---- */
+  --el-bg-color: #{$bg-secondary};
+  --el-bg-color-page: #{$bg-primary};
+  --el-bg-color-overlay: #{$bg-secondary};
+
+  /* ---- EP 文字色 ---- */
+  --el-text-color-primary: #{$text-primary};
+  --el-text-color-regular: #{$text-regular};
+  --el-text-color-secondary: #{$text-secondary};
+  --el-text-color-placeholder: #{$text-placeholder};
+  --el-text-color-disabled: mix(#{$text-placeholder}, #{$bg-primary}, 60%);
+
+  /* ---- EP 边框色 ---- */
+  --el-border-color: #{$border-color};
+  --el-border-color-light: #{$border-light};
+  --el-border-color-lighter: #{$border-lighter};
+  --el-border-color-extra-light: darken(#{$border-lighter}, 3%);
+  --el-border-color-dark: darken(#{$border-color}, 10%);
+  --el-border-color-darker: darken(#{$border-color}, 20%);
+
+  /* ---- EP 填充色 ---- */
+  --el-fill-color: #{$bg-tertiary};
+  --el-fill-color-light: mix(#{$bg-tertiary}, #{$bg-secondary}, 50%);
+  --el-fill-color-lighter: #{$bg-tertiary};
+  --el-fill-color-extra-light: mix(#{$bg-tertiary}, #{$bg-primary}, 30%);
+  --el-fill-color-dark: darken(#{$bg-tertiary}, 6%);
+  --el-fill-color-darker: darken(#{$bg-tertiary}, 12%);
+  --el-fill-color-blank: transparent;
+
+  /* ---- EP 遮罩 ---- */
+  --el-mask-color: rgba(0, 0, 0, 0.45);
+  --el-mask-color-extra-light: rgba(0, 0, 0, 0.20);
+
+  /* ---- EP 阴影 ---- */
+  --el-box-shadow: #{$shadow-lg};
+  --el-box-shadow-light: #{$shadow-sm};
+  --el-box-shadow-lighter: 0px 1px 4px rgba(0, 0, 0, 0.06);
+  --el-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.20),
+                    0px 12px 32px rgba(0, 0, 0, 0.30);
+
+  /* ---- EP 禁用态 ---- */
+  --el-disabled-bg-color: #{$bg-tertiary};
+  --el-disabled-text-color: #{$text-placeholder};
+  --el-disabled-border-color: #{$border-light};
+
+  /* ---- 自定义变量 ---- */
+  --bg-primary: #{$bg-primary};
+  --bg-secondary: #{$bg-secondary};
+  --bg-sidebar: #{$bg-sidebar};
+  --bg-hover: #{$bg-hover};
+  --bg-tertiary: #{$bg-tertiary};
+  --bg-hover-soft: #{$bg-hover-soft};
+
+  --text-primary: #{$text-primary};
+  --text-regular: #{$text-regular};
+  --text-secondary: #{$text-secondary};
+  --text-placeholder: #{$text-placeholder};
+
+  --border-color: #{$border-color};
+  --border-light: #{$border-light};
+  --border-lighter: #{$border-lighter};
+
+  --sidebar-text: #{$sidebar-text};
+  --sidebar-border: #{$sidebar-border};
+
+  --drag-over-bg: #{$drag-over-bg};
+  --drag-over-bg-strong: #{$drag-over-bg-strong};
+  --danger-light: #{$danger-light};
+  --primary-light: #{$primary-light};
+
+  --shadow-sm: #{$shadow-sm};
+  --shadow-lg: #{$shadow-lg};
+
+  --tooltip-bg: #{$tooltip-bg};
+  --tooltip-color: #{$tooltip-color};
+  --heat-empty-bg: #{$heat-empty-bg};
+  --chart-border: #{$chart-border};
+  --chart-label-color: #{$chart-label-color};
+  --text-on-primary: #{$text-on-primary};
+}
+
+@mixin el-dark-vars(
+  $bg-primary,
+  $bg-secondary,
+  $bg-sidebar,
+  $bg-hover,
+  $bg-tertiary,
+  $bg-hover-soft,
+  $text-primary,
+  $text-regular,
+  $text-secondary,
+  $text-placeholder,
+  $border-color,
+  $border-light,
+  $border-lighter,
+  $sidebar-text,
+  $sidebar-border,
+  $drag-over-bg,
+  $drag-over-bg-strong,
+  $danger-light,
+  $primary-light,
+  $tooltip-bg,
+  $tooltip-color,
+  $heat-empty-bg,
+  $chart-border,
+  $chart-label-color,
+  $text-on-primary,
+  $shadow-sm,
+  $shadow-lg
+) {
+  /* ---- EP 主色系 light 变体（深色背景适配）---- */
+  --el-color-primary-light-3: rgba(64, 158, 255, 0.32);
+  --el-color-primary-light-5: rgba(64, 158, 255, 0.16);
+  --el-color-primary-light-7: rgba(64, 158, 255, 0.10);
+  --el-color-primary-light-8: rgba(64, 158, 255, 0.06);
+  --el-color-primary-light-9: rgba(64, 158, 255, 0.04);
+  --el-color-primary-dark-2: #337ecc;
+
+  --el-color-success-light-3: rgba(103, 194, 58, 0.32);
+  --el-color-success-light-5: rgba(103, 194, 58, 0.16);
+  --el-color-success-light-7: rgba(103, 194, 58, 0.10);
+  --el-color-success-light-8: rgba(103, 194, 58, 0.06);
+  --el-color-success-light-9: rgba(103, 194, 58, 0.04);
+
+  --el-color-warning-light-3: rgba(230, 162, 60, 0.32);
+  --el-color-warning-light-5: rgba(230, 162, 60, 0.16);
+  --el-color-warning-light-7: rgba(230, 162, 60, 0.10);
+  --el-color-warning-light-8: rgba(230, 162, 60, 0.06);
+  --el-color-warning-light-9: rgba(230, 162, 60, 0.04);
+
+  --el-color-danger-light-3: rgba(245, 108, 108, 0.32);
+  --el-color-danger-light-5: rgba(245, 108, 108, 0.16);
+  --el-color-danger-light-7: rgba(245, 108, 108, 0.10);
+  --el-color-danger-light-8: rgba(245, 108, 108, 0.06);
+  --el-color-danger-light-9: rgba(245, 108, 108, 0.04);
+
+  --el-color-info-light-3: rgba(144, 147, 153, 0.32);
+  --el-color-info-light-5: rgba(144, 147, 153, 0.16);
+  --el-color-info-light-7: rgba(144, 147, 153, 0.10);
+  --el-color-info-light-8: rgba(144, 147, 153, 0.06);
+  --el-color-info-light-9: rgba(144, 147, 153, 0.04);
+
+  /* ---- EP 背景色 ---- */
+  --el-bg-color: #{$bg-secondary};
+  --el-bg-color-page: #{$bg-primary};
+  --el-bg-color-overlay: #{$bg-secondary};
+
+  /* ---- EP 文字色 ---- */
+  --el-text-color-primary: #{$text-primary};
+  --el-text-color-regular: #{$text-regular};
+  --el-text-color-secondary: #{$text-secondary};
+  --el-text-color-placeholder: #{$text-placeholder};
+  --el-text-color-disabled: #4c4c4c;
+
+  /* ---- EP 边框色 ---- */
+  --el-border-color: #{$border-color};
+  --el-border-color-light: #{$border-color};
+  --el-border-color-lighter: #{$border-light};
+  --el-border-color-extra-light: #{$border-lighter};
+  --el-border-color-dark: darken(#{$border-color}, 15%);
+  --el-border-color-darker: darken(#{$border-color}, 25%);
+
+  /* ---- EP 填充色 ---- */
+  --el-fill-color: lighten(#{$bg-secondary}, 5%);
+  --el-fill-color-light: lighten(#{$bg-secondary}, 3%);
+  --el-fill-color-lighter: #{$bg-secondary};
+  --el-fill-color-extra-light: #{$bg-tertiary};
+  --el-fill-color-dark: #{$bg-hover};
+  --el-fill-color-darker: lighten(#{$bg-hover}, 5%);
+  --el-fill-color-blank: transparent;
+
+  /* ---- EP 遮罩 ---- */
+  --el-mask-color: rgba(0, 0, 0, 0.65);
+  --el-mask-color-extra-light: rgba(0, 0, 0, 0.35);
+
+  /* ---- EP 阴影 ---- */
+  --el-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.36),
+                  0px 8px 20px rgba(0, 0, 0, 0.72);
+  --el-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.18);
+  --el-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.10);
+  --el-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.50),
+                    0px 12px 32px rgba(0, 0, 0, 0.72);
+
+  /* ---- EP 禁用态 ---- */
+  --el-disabled-bg-color: #{$bg-tertiary};
+  --el-disabled-text-color: #{$text-placeholder};
+  --el-disabled-border-color: #{$border-light};
+
+  /* ---- 自定义变量 ---- */
+  --bg-primary: #{$bg-primary};
+  --bg-secondary: #{$bg-secondary};
+  --bg-sidebar: #{$bg-sidebar};
+  --bg-hover: #{$bg-hover};
+  --bg-tertiary: #{$bg-tertiary};
+  --bg-hover-soft: #{$bg-hover-soft};
+
+  --text-primary: #{$text-primary};
+  --text-regular: #{$text-regular};
+  --text-secondary: #{$text-secondary};
+  --text-placeholder: #{$text-placeholder};
+
+  --border-color: #{$border-color};
+  --border-light: #{$border-light};
+  --border-lighter: #{$border-lighter};
+
+  --sidebar-text: #{$sidebar-text};
+  --sidebar-border: #{$sidebar-border};
+
+  --drag-over-bg: #{$drag-over-bg};
+  --drag-over-bg-strong: #{$drag-over-bg-strong};
+  --danger-light: #{$danger-light};
+  --primary-light: #{$primary-light};
+
+  --shadow-sm: #{$shadow-sm};
+  --shadow-lg: #{$shadow-lg};
+
+  --tooltip-bg: #{$tooltip-bg};
+  --tooltip-color: #{$tooltip-color};
+  --heat-empty-bg: #{$heat-empty-bg};
+  --chart-border: #{$chart-border};
+  --chart-label-color: #{$chart-label-color};
+  --text-on-primary: #{$text-on-primary};
+}

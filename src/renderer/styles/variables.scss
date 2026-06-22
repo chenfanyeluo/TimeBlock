@@ -1,4 +1,13 @@
+@use './mixins/theme.scss' as *;
+
+// ================================================================
+// 主题变量定义
+// :root = 默认浅色主题
+// [data-theme="xxx"] = 各色主题（含 --el-* 根变量覆盖）
+// ================================================================
+
 :root {
+  /* ---- 语义色（不随主题变化）---- */
   --primary-color: #409eff;
   --primary-light: #ecf5ff;
   --success-color: #67c23a;
@@ -6,23 +15,53 @@
   --danger-color: #f56c6c;
   --info-color: #909399;
 
+  /* ---- 背景色 ---- */
   --bg-primary: #f5f7fa;
   --bg-secondary: #ffffff;
   --bg-sidebar: #304156;
   --bg-hover: #f5f7fa;
+  --bg-tertiary: #fafafa;
+  --bg-hover-soft: rgba(0, 0, 0, 0.02);
 
+  /* ---- 文字色 ---- */
   --text-primary: #303133;
   --text-regular: #606266;
   --text-secondary: #909399;
   --text-placeholder: #c0c4cc;
 
+  /* ---- 边框色 ---- */
   --border-color: #dcdfe6;
   --border-light: #e4e7ed;
+  --border-lighter: #ebeef5;
 
+  /* ---- 侧边栏 ---- */
+  --sidebar-text: #bfcbd9;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+
+  /* ---- 拖拽/交互态 ---- */
+  --drag-over-bg: rgba(64, 158, 255, 0.04);
+  --drag-over-bg-strong: rgba(64, 158, 255, 0.08);
+  --danger-light: #fef0f0;
+
+  /* ---- 阴影 ---- */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* ---- 特殊场景 ---- */
+  --tooltip-bg: #303133;
+  --tooltip-color: #fff;
+  --heat-empty-bg: #f0f0f0;
+  --chart-border: #fff;
+  --chart-label-color: #666;
+  --text-on-primary: #fff;
+
+  /* ---- 布局尺寸 ---- */
   --sidebar-width: 200px;
   --header-height: 60px;
-  --timeline-width: 60px;
+  --timeline-width: 56px;
+  --grid-total-hours: 24;
 
+  /* ---- 便签分类色（用户数据，不随主题变化）---- */
   --category-work: #409eff;
   --category-study: #67c23a;
   --category-rest: #e6a23c;
@@ -31,16 +70,191 @@
   --category-other: #909399;
 }
 
+// ================================================================
+// 深色主题
+// ================================================================
 [data-theme="dark"] {
-  --bg-primary: #141414;
-  --bg-secondary: #1f1f1f;
-  --bg-sidebar: #141414;
-  --bg-hover: #2c2c2c;
+  @include el-dark-vars(
+    $bg-primary: #141414,
+    $bg-secondary: #1f1f1f,
+    $bg-sidebar: #1a1a2e,
+    $bg-hover: #2c2c2c,
+    $bg-tertiary: #181818,
+    $bg-hover-soft: rgba(255, 255, 255, 0.03),
+    $text-primary: #e0e0e0,
+    $text-regular: #b0b0b0,
+    $text-secondary: #808080,
+    $text-placeholder: #555555,
+    $border-color: #434343,
+    $border-light: #303030,
+    $border-lighter: #2a2a2a,
+    $sidebar-text: #8a8a9a,
+    $sidebar-border: rgba(255, 255, 255, 0.06),
+    $drag-over-bg: rgba(64, 158, 255, 0.06),
+    $drag-over-bg-strong: rgba(64, 158, 255, 0.12),
+    $danger-light: #3d2020,
+    $primary-light: rgba(64, 158, 255, 0.12),
+    $tooltip-bg: #4a4a5a,
+    $tooltip-color: #e0e0e0,
+    $heat-empty-bg: #222222,
+    $chart-border: #2a2a2a,
+    $chart-label-color: #999999,
+    $text-on-primary: #e0e0e0,
+    $shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25),
+    $shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4)
+  );
+}
 
-  --text-primary: #e0e0e0;
-  --text-regular: #b0b0b0;
-  --text-secondary: #808080;
+// ================================================================
+// 护眼绿主题
+// ================================================================
+[data-theme="green"] {
+  @include el-theme-vars(
+    $bg-primary: #f0f5f0,
+    $bg-secondary: #f7fbf7,
+    $bg-sidebar: #2d5038,
+    $bg-hover: #e2ede2,
+    $bg-tertiary: #eaf2ea,
+    $bg-hover-soft: rgba(45, 80, 56, 0.04),
+    $text-primary: #1a3320,
+    $text-regular: #3d5c46,
+    $text-secondary: #60826a,
+    $text-placeholder: #8aa894,
+    $border-color: #b8d4be,
+    $border-light: #cce0d0,
+    $border-lighter: #ddece2,
+    $sidebar-text: #b8d4be,
+    $sidebar-border: rgba(255, 255, 255, 0.10),
+    $drag-over-bg: rgba(64, 158, 255, 0.05),
+    $drag-over-bg-strong: rgba(64, 158, 255, 0.10),
+    $danger-light: #fce8e8,
+    $primary-light: rgba(64, 158, 255, 0.10),
+    $tooltip-bg: #2d5038,
+    $tooltip-color: #f0f5f0,
+    $heat-empty-bg: #e2ede2,
+    $chart-border: #f7fbf7,
+    $chart-label-color: #60826a,
+    $text-on-primary: #fff,
+    $shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04),
+    $shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08)
+  );
+}
 
-  --border-color: #434343;
-  --border-light: #303030;
+// ================================================================
+// 暖色主题（护眼/阅读模式）
+// ================================================================
+[data-theme="warm"] {
+  @include el-theme-vars(
+    $bg-primary: #faf6f0,
+    $bg-secondary: #fdfbf7,
+    $bg-sidebar: #6b5344,
+    $bg-hover: #f0e8dc,
+    $bg-tertiary: #f5efe6,
+    $bg-hover-soft: rgba(107, 83, 68, 0.04),
+    $text-primary: #3d3027,
+    $text-regular: #5c4d41,
+    $text-secondary: #8a7a6a,
+    $text-placeholder: #b0a498,
+    $border-color: #ddd0c2,
+    $border-light: #e8ded2,
+    $border-lighter: #f0e8dc,
+    $sidebar-text: #d4cabb,
+    $sidebar-border: rgba(255, 255, 255, 0.10),
+    $drag-over-bg: rgba(64, 158, 255, 0.05),
+    $drag-over-bg-strong: rgba(64, 158, 255, 0.10),
+    $danger-light: #fbe0d8,
+    $primary-light: rgba(64, 158, 255, 0.10),
+    $tooltip-bg: #5c4d41,
+    $tooltip-color: #faf6f0,
+    $heat-empty-bg: #f0e8dc,
+    $chart-border: #fdfbf7,
+    $chart-label-color: #8a7a6a,
+    $text-on-primary: #fff,
+    $shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04),
+    $shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08)
+  );
+}
+
+// ================================================================
+// 深蓝主题
+// ================================================================
+[data-theme="blue"] {
+  @include el-dark-vars(
+    $bg-primary: #0a1628,
+    $bg-secondary: #132240,
+    $bg-sidebar: #0d1f38,
+    $bg-hover: #1a3152,
+    $bg-tertiary: #0f1d32,
+    $bg-hover-soft: rgba(64, 128, 255, 0.04),
+    $text-primary: #c9d6df,
+    $text-regular: #98a8b8,
+    $text-secondary: #6b8299,
+    $text-placeholder: #4a6580,
+    $border-color: #1e3a5f,
+    $border-light: #162d4a,
+    $border-lighter: #0f2238,
+    $sidebar-text: #7a9cc0,
+    $sidebar-border: rgba(100, 160, 220, 0.08),
+    $drag-over-bg: rgba(64, 158, 255, 0.07),
+    $drag-over-bg-strong: rgba(64, 158, 255, 0.14),
+    $danger-light: #3d1f20,
+    $primary-light: rgba(64, 158, 255, 0.14),
+    $tooltip-bg: #1e3a5f,
+    $tooltip-color: #c9d6df,
+    $heat-empty-bg: #132240,
+    $chart-border: #1e3a5f,
+    $chart-label-color: #6b8299,
+    $text-on-primary: #e0e0e0,
+    $shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.30),
+    $shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45)
+  );
+
+  // 深蓝特有：主色调偏蓝
+  --el-color-primary: #4a90ff;
+  --el-color-primary-light-3: rgba(74, 144, 255, 0.32);
+  --el-color-primary-light-5: rgba(74, 144, 255, 0.16);
+  --el-color-primary-light-7: rgba(74, 144, 255, 0.10);
+  --el-color-primary-light-8: rgba(74, 144, 255, 0.06);
+  --el-color-primary-light-9: rgba(74, 144, 255, 0.04);
+  --el-color-primary-dark-2: #3a78dd;
+}
+
+// ================================================================
+// 高对比度主题（无障碍）
+// ================================================================
+[data-theme="contrast"] {
+  @include el-theme-vars(
+    $bg-primary: #ffffff,
+    $bg-secondary: #ffffff,
+    $bg-sidebar: #000000,
+    $bg-hover: #eeeeee,
+    $bg-tertiary: #f5f5f5,
+    $bg-hover-soft: rgba(0, 0, 0, 0.03),
+    $text-primary: #000000,
+    $text-regular: #1a1a1a,
+    $text-secondary: #444444,
+    $text-placeholder: #777777,
+    $border-color: #000000,
+    $border-light: #333333,
+    $border-lighter: #888888,
+    $sidebar-text: #ffffff,
+    $sidebar-border: rgba(255, 255, 255, 0.15),
+    $drag-over-bg: rgba(64, 158, 255, 0.08),
+    $drag-over-bg-strong: rgba(64, 158, 255, 0.16),
+    $danger-light: #ffe0e0,
+    $primary-light: rgba(64, 158, 255, 0.15),
+    $tooltip-bg: #000000,
+    $tooltip-color: #ffffff,
+    $heat-empty-bg: #eeeeee,
+    $chart-border: #ffffff,
+    $chart-label-color: #333333,
+    $text-on-primary: #ffffff,
+    $shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.15),
+    $shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.25)
+  );
+
+  // 高对比特有：加粗边框和文字
+  --el-border-width: 2px;
+  --el-border-width-thin: 1px;
+  --el-font-weight-primary: 600;
 }

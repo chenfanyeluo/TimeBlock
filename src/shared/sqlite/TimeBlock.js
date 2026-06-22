@@ -5,7 +5,7 @@
  * - 创建/编辑/删除时间块（支持软删除）
  * - 日/周/月视图查询（使用覆盖索引优化）
  * - 全文搜索（基于 LIKE，SQLite FTS5 可选升级）
- * - 按分类筛选
+ * - 按便签筛选
  * - 分页查询
  *
  * 性能优化:
@@ -27,11 +27,11 @@ class TimeBlockModel {
    */
   create(data) {
     const result = exec(
-      `INSERT INTO time_blocks (user_id, category_id, title, description, start_time, end_time, is_completed)
+      `INSERT INTO time_blocks (user_id, note_id, title, description, start_time, end_time, is_completed)
        VALUES (?, ?, ?, ?, ?, ?, ?);`,
       [
         data.user_id,
-        data.category_id || null,
+        data.note_id || null,
         data.title,
         data.description || null,
         data.start_time,
@@ -51,12 +51,12 @@ class TimeBlockModel {
    */
   findById(id) {
     return get(
-      `SELECT tb.id, tb.user_id, tb.category_id, tb.title, tb.description,
+      `SELECT tb.id, tb.user_id, tb.note_id, tb.title, tb.description,
               tb.start_time, tb.end_time, tb.is_completed,
               tb.created_at, tb.updated_at,
-              c.name AS category_name, c.color AS category_color, c.icon AS category_icon
+              n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN categories c ON tb.category_id = c.id AND c.deleted_at IS NULL
+       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE tb.id = ? AND tb.deleted_at IS NULL;`,
       [id]
     )
@@ -81,9 +81,9 @@ class TimeBlockModel {
       fields.push('description = ?')
       values.push(data.description)
     }
-    if (data.category_id !== undefined) {
-      fields.push('category_id = ?')
-      values.push(data.category_id)
+    if (data.note_id !== undefined) {
+      fields.push('note_id = ?')
+      values.push(data.note_id)
     }
     if (data.start_time !== undefined) {
       fields.push('start_time = ?')
@@ -177,11 +177,11 @@ class TimeBlockModel {
     const dayEnd = `${date}T23:59:59.999Z`
 
     return all(
-      `SELECT tb.id, tb.title, tb.description, tb.category_id,
+      `SELECT tb.id, tb.title, tb.description, tb.note_id,
               tb.start_time, tb.end_time, tb.is_completed,
-              c.name AS category_name, c.color AS category_color
+              n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN categories c ON tb.category_id = c.id AND c.deleted_at IS NULL
+       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE tb.user_id = ?
          AND tb.deleted_at IS NULL
          AND tb.start_time < ?
@@ -204,11 +204,11 @@ class TimeBlockModel {
     const weekEnd = `${endDate}T23:59:59.999Z`
 
     return all(
-      `SELECT tb.id, tb.title, tb.description, tb.category_id,
+      `SELECT tb.id, tb.title, tb.description, tb.note_id,
               tb.start_time, tb.end_time, tb.is_completed,
-              c.name AS category_name, c.color AS category_color
+              n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN categories c ON tb.category_id = c.id AND c.deleted_at IS NULL
+       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE tb.user_id = ?
          AND tb.deleted_at IS NULL
          AND tb.start_time < ?
@@ -234,11 +234,11 @@ class TimeBlockModel {
     const lastDay = `${year}-${String(month).padStart(2, '0')}-${lastDayOfMonth}T23:59:59.999Z`
 
     return all(
-      `SELECT tb.id, tb.title, tb.description, tb.category_id,
+      `SELECT tb.id, tb.title, tb.description, tb.note_id,
               tb.start_time, tb.end_time, tb.is_completed,
-              c.name AS category_name, c.color AS category_color
+              n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN categories c ON tb.category_id = c.id AND c.deleted_at IS NULL
+       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE tb.user_id = ?
          AND tb.deleted_at IS NULL
          AND tb.start_time < ?
@@ -259,13 +259,13 @@ class TimeBlockModel {
    * @param {number} options.userId 用户ID（必填）
    * @param {string} [options.startDate] 开始日期
    * @param {string} [options.endDate] 结束日期
-   * @param {number} [options.categoryId] 分类ID
+   * @param {number} [options.noteId] 便签ID
    * @param {number} [options.page=1] 页码
    * @param {number} [options.pageSize=20] 每页数量
    * @returns {{ items: Object[], pagination: Object }}
    */
   findList(options) {
-    const { userId, startDate, endDate, categoryId, page = 1, pageSize = 20 } = options
+    const { userId, startDate, endDate, noteId, page = 1, pageSize = 20 } = options
     const conditions = ['tb.user_id = ?', 'tb.deleted_at IS NULL']
     const values = [userId]
 
@@ -277,21 +277,21 @@ class TimeBlockModel {
       conditions.push('tb.end_time <= ?')
       values.push(endDate)
     }
-    if (categoryId !== undefined && categoryId !== null) {
-      conditions.push('tb.category_id = ?')
-      values.push(categoryId)
+    if (noteId !== undefined && noteId !== null) {
+      conditions.push('tb.note_id = ?')
+      values.push(noteId)
     }
 
     const whereClause = conditions.join(' AND ')
     const offset = (page - 1) * pageSize
 
     const items = all(
-      `SELECT tb.id, tb.user_id, tb.category_id, tb.title, tb.description,
+      `SELECT tb.id, tb.user_id, tb.note_id, tb.title, tb.description,
               tb.start_time, tb.end_time, tb.is_completed,
               tb.created_at, tb.updated_at,
-              c.name AS category_name, c.color AS category_color
+              n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN categories c ON tb.category_id = c.id AND c.deleted_at IS NULL
+       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE ${whereClause}
        ORDER BY tb.start_time DESC
        LIMIT ? OFFSET ?;`,
@@ -331,12 +331,12 @@ class TimeBlockModel {
    * @param {string} options.keyword 搜索关键词
    * @param {string} [options.startDate] 开始日期
    * @param {string} [options.endDate] 结束日期
-   * @param {number} [options.categoryId] 分类ID
+   * @param {number} [options.noteId] 便签ID
    * @param {number} [options.limit=20] 返回数量限制
    * @returns {Object[]}
    */
   search(options) {
-    const { userId, keyword, startDate, endDate, categoryId, limit = 20 } = options
+    const { userId, keyword, startDate, endDate, noteId, limit = 20 } = options
 
     const conditions = ['tb.user_id = ?', 'tb.deleted_at IS NULL']
     const values = [userId]
@@ -356,19 +356,19 @@ class TimeBlockModel {
       conditions.push('tb.end_time <= ?')
       values.push(endDate)
     }
-    if (categoryId !== undefined && categoryId !== null) {
-      conditions.push('tb.category_id = ?')
-      values.push(categoryId)
+    if (noteId !== undefined && noteId !== null) {
+      conditions.push('tb.note_id = ?')
+      values.push(noteId)
     }
 
     const whereClause = conditions.join(' AND ')
 
     return all(
-      `SELECT tb.id, tb.user_id, tb.category_id, tb.title, tb.description,
+      `SELECT tb.id, tb.user_id, tb.note_id, tb.title, tb.description,
               tb.start_time, tb.end_time, tb.is_completed,
-              c.name AS category_name, c.color AS category_color
+              n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN categories c ON tb.category_id = c.id AND c.deleted_at IS NULL
+       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE ${whereClause}
        ORDER BY tb.start_time DESC
        LIMIT ?;`,
@@ -381,27 +381,27 @@ class TimeBlockModel {
   // =============================================
 
   /**
-   * 获取用户在指定时间段内各分类的总耗时
+   * 获取用户在指定时间段内各便签的总耗时
    *
    * @param {number} userId 用户ID
    * @param {string} startDate 开始时间
    * @param {string} endDate 结束时间
-   * @returns {Array<{ categoryId: number, categoryName: string, color: string, totalSeconds: number, blockCount: number }>}
+   * @returns {Array<{ noteId: number, noteName: string, color: string, totalSeconds: number, blockCount: number }>}
    */
-  getDurationByCategory(userId, startDate, endDate) {
+  getDurationByNote(userId, startDate, endDate) {
     return all(
-      `SELECT tb.category_id,
-              COALESCE(c.name, '未分类') AS category_name,
-              COALESCE(c.color, '#999999') AS color,
+      `SELECT tb.note_id,
+              COALESCE(n.name, '未分类') AS note_name,
+              COALESCE(n.color, '#999999') AS color,
               CAST(SUM(CAST((julianday(tb.end_time) - julianday(tb.start_time)) * 86400 AS INTEGER)) AS INTEGER) AS total_seconds,
               COUNT(*) AS block_count
        FROM time_blocks tb
-       LEFT JOIN categories c ON tb.category_id = c.id AND c.deleted_at IS NULL
+       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE tb.user_id = ?
          AND tb.deleted_at IS NULL
          AND tb.start_time >= ?
          AND tb.end_time <= ?
-       GROUP BY tb.category_id
+       GROUP BY tb.note_id
        ORDER BY total_seconds DESC;`,
       [userId, startDate, endDate]
     )
@@ -412,22 +412,22 @@ class TimeBlockModel {
    *
    * @param {number} userId 用户ID
    * @param {string} date 日期 (YYYY-MM-DD)
-   * @returns {{ date: string, totalDuration: number, categories: Array }}
+   * @returns {{ date: string, totalDuration: number, notes: Array }}
    */
   getDailyStats(userId, date) {
     const dayStart = `${date}T00:00:00.000Z`
     const dayEnd = `${date}T23:59:59.999Z`
 
-    const categories = this.getDurationByCategory(userId, dayStart, dayEnd)
+    const notes = this.getDurationByNote(userId, dayStart, dayEnd)
 
-    const totalDuration = categories.reduce((sum, cat) => sum + (cat.total_seconds || 0), 0)
+    const totalDuration = notes.reduce((sum, cat) => sum + (cat.total_seconds || 0), 0)
 
     return {
       date,
       totalDuration,
-      categories: categories.map(cat => ({
-        categoryId: cat.category_id,
-        categoryName: cat.category_name,
+      notes: notes.map(cat => ({
+        noteId: cat.note_id,
+        noteName: cat.note_name,
         color: cat.color,
         duration: cat.total_seconds,
         percentage: totalDuration > 0 ? Math.round((cat.total_seconds / totalDuration) * 10000) / 100 : 0
@@ -441,7 +441,7 @@ class TimeBlockModel {
    * @param {number} userId 用户ID
    * @param {string} startDate 开始日期
    * @param {string} endDate 结束日期
-   * @returns {{ days: Array, categories: Array }}
+   * @returns {{ days: Array, notes: Array }}
    */
   getWeeklyStats(userId, startDate, endDate) {
     const weekStart = `${startDate}T00:00:00.000Z`
@@ -459,10 +459,10 @@ class TimeBlockModel {
       [userId, weekStart, weekEnd]
     )
 
-    // 按分类统计
-    const categories = this.getDurationByCategory(userId, weekStart, weekEnd)
+    // 按便签统计
+    const notes = this.getDurationByNote(userId, weekStart, weekEnd)
 
-    return { days, categories }
+    return { days, notes }
   }
 
   /**
@@ -471,7 +471,7 @@ class TimeBlockModel {
    * @param {number} userId 用户ID
    * @param {number} year 年份
    * @param {number} month 月份 (1-12)
-   * @returns {{ year: number, month: number, weeks: Array, categories: Array }}
+   * @returns {{ year: number, month: number, weeks: Array, notes: Array }}
    */
   getMonthlyStats(userId, year, month) {
     const firstDay = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`
@@ -490,10 +490,10 @@ class TimeBlockModel {
       [userId, firstDay, lastDay]
     )
 
-    // 按分类统计
-    const categories = this.getDurationByCategory(userId, firstDay, lastDay)
+    // 按便签统计
+    const notes = this.getDurationByNote(userId, firstDay, lastDay)
 
-    return { year, month, weeks, categories }
+    return { year, month, weeks, notes }
   }
 
   /**

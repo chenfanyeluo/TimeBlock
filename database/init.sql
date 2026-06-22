@@ -24,7 +24,7 @@ DROP TABLE IF EXISTS `active_timers`;
 DROP TABLE IF EXISTS `sync_logs`;
 DROP TABLE IF EXISTS `statistics`;
 DROP TABLE IF EXISTS `time_blocks`;
-DROP TABLE IF EXISTS `categories`;
+DROP TABLE IF EXISTS `notes`;
 DROP TABLE IF EXISTS `users`;
 
 CREATE TABLE `users` (
@@ -45,45 +45,42 @@ CREATE TABLE `users` (
   COMMENT='用户表';
 
 -- --------------------------------------------------------------------------
--- 3. categories 分类表
+-- 3. notes 便签表
 -- --------------------------------------------------------------------------
--- 说明: 用户自定义时间块分类，级联删除关联数据
+-- 说明: 用户自定义便签（颜色+名称），直接拖入时间块使用
 -- 外键: user_id -> users(id) ON DELETE CASCADE
-CREATE TABLE `categories` (
+CREATE TABLE `notes` (
   `id`          BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `user_id`     BIGINT        NOT NULL                COMMENT '所属用户ID',
-  `name`        VARCHAR(100)  NOT NULL                COMMENT '分类名称',
-  `color`       VARCHAR(7)    NOT NULL DEFAULT '#1890ff' COMMENT '分类颜色 (HEX)',
-  `icon`        VARCHAR(50)   NULL     DEFAULT NULL   COMMENT '图标名称',
-  `sort_order`  INT           NOT NULL DEFAULT 0      COMMENT '排序顺序',
+  `name`        VARCHAR(100)  NOT NULL                COMMENT '便签名称',
+  `color`       VARCHAR(7)    NOT NULL DEFAULT '#409eff' COMMENT '便签颜色 (HEX)',
   `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted_at`  DATETIME      NULL     DEFAULT NULL   COMMENT '删除时间 (NULL=未删除)',
   PRIMARY KEY (`id`),
   INDEX `idx_user_id` (`user_id`),
-  INDEX `idx_sort_order` (`user_id`, `sort_order`),
   INDEX `idx_deleted` (`deleted_at`),
-  CONSTRAINT `fk_category_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+  CONSTRAINT `fk_note_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
-  COMMENT='分类表';
+  COMMENT='便签表';
 
 -- --------------------------------------------------------------------------
 -- 4. time_blocks 时间块表
 -- --------------------------------------------------------------------------
 -- 说明: 核心业务表，记录用户的时间块数据
 -- 索引策略:
---   - idx_user_category: 联合索引，支持按用户+分类查询（租户隔离）
+--   - idx_user_note: 联合索引，支持按用户+便签查询（租户隔离）
 --   - idx_time_range: 时间范围联合索引
 --   - idx_user_date_covering: 覆盖索引，日视图高频查询零回表优化
 --   - ft_title_desc: 全文索引，支持中文分词搜索（需配置 ngram parser）
 -- 外键: user_id -> users(id) ON DELETE CASCADE
---       category_id -> categories(id) ON DELETE SET NULL
+--       note_id -> notes(id) ON DELETE SET NULL
 CREATE TABLE `time_blocks` (
   `id`            BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `user_id`       BIGINT        NOT NULL                COMMENT '所属用户ID',
-  `category_id`   BIGINT        NULL     DEFAULT NULL   COMMENT '分类ID',
+  `note_id`       BIGINT        NULL     DEFAULT NULL   COMMENT '便签ID',
   `title`         VARCHAR(200)  NOT NULL                COMMENT '时间块标题',
   `description`   TEXT          NULL     DEFAULT NULL   COMMENT '描述/备注',
   `start_time`    TIMESTAMP     NOT NULL                COMMENT '开始时间 (UTC)',
@@ -94,13 +91,13 @@ CREATE TABLE `time_blocks` (
   `deleted_at`    DATETIME      NULL     DEFAULT NULL   COMMENT '删除时间 (NULL=未删除)',
   PRIMARY KEY (`id`),
   INDEX `idx_user_id` (`user_id`),
-  INDEX `idx_user_category` (`user_id`, `category_id`),
+  INDEX `idx_user_note` (`user_id`, `note_id`),
   INDEX `idx_time_range` (`user_id`, `start_time`, `end_time`),
-  INDEX `idx_user_date_covering` (`user_id`, `deleted_at`, `start_time`, `end_time`, `category_id`, `title`, `is_completed`),
+  INDEX `idx_user_date_covering` (`user_id`, `deleted_at`, `start_time`, `end_time`, `note_id`, `title`, `is_completed`),
   FULLTEXT INDEX `ft_title_desc` (`title`, `description`),
   INDEX `idx_deleted` (`deleted_at`),
   CONSTRAINT `fk_timeblock_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_timeblock_category` FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL
+  CONSTRAINT `fk_timeblock_note` FOREIGN KEY (`note_id`) REFERENCES `notes`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
@@ -120,7 +117,7 @@ CREATE TABLE `active_timers` (
   `user_id`          BIGINT        NOT NULL                COMMENT '所属用户ID（主键，每用户唯一）',
   `time_block_id`    BIGINT        NULL     DEFAULT NULL   COMMENT '关联的时间块ID（停止后回写）',
   `title`            VARCHAR(200)  NOT NULL                COMMENT '计时器标题',
-  `category_id`      BIGINT        NULL     DEFAULT NULL   COMMENT '分类ID',
+  `note_id`        BIGINT        NULL     DEFAULT NULL   COMMENT '便签ID',
   `started_at`       TIMESTAMP     NOT NULL                COMMENT '计时器启动时间 (UTC)',
   `elapsed_paused`   INT           NOT NULL DEFAULT 0      COMMENT '累计暂停时长（秒），支持暂停/恢复',
   `is_paused`        TINYINT(1)    NOT NULL DEFAULT 0      COMMENT '是否处于暂停状态 (0/1)',
@@ -161,23 +158,23 @@ CREATE TABLE `sync_logs` (
 -- 7. statistics 统计汇总表
 -- --------------------------------------------------------------------------
 -- 说明: 预计算的日统计数据，提高报表查询效率
---       category_id 为 NULL 时表示全天总计
--- 唯一约束: (user_id, stat_date, category_id) 防止重复统计
+--       note_id 为 NULL 时表示全天总计
+-- 唯一约束: (user_id, stat_date, note_id) 防止重复统计
 -- 外键: user_id -> users(id) ON DELETE CASCADE
---       category_id -> categories(id) ON DELETE SET NULL
+--       note_id -> notes(id) ON DELETE SET NULL
 CREATE TABLE `statistics` (
   `id`             BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `user_id`        BIGINT        NOT NULL                COMMENT '所属用户ID',
   `stat_date`      DATE          NOT NULL                COMMENT '统计日期',
-  `category_id`    BIGINT        NULL     DEFAULT NULL   COMMENT '分类ID (NULL=全天总计)',
-  `total_seconds`  INT           NOT NULL DEFAULT 0      COMMENT '该分类总秒数',
+  `note_id`        BIGINT        NULL     DEFAULT NULL   COMMENT '便签ID (NULL=全天总计)',
+  `total_seconds`  INT           NOT NULL DEFAULT 0      COMMENT '该便签总秒数',
   `block_count`    INT           NOT NULL DEFAULT 0      COMMENT '时间块数量',
   `created_at`     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `idx_stat_unique` (`user_id`, `stat_date`, `category_id`),
+  UNIQUE KEY `idx_stat_unique` (`user_id`, `stat_date`, `note_id`),
   INDEX `idx_stat_user_date` (`user_id`, `stat_date`),
   CONSTRAINT `fk_stat_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_stat_category` FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL
+  CONSTRAINT `fk_stat_note` FOREIGN KEY (`note_id`) REFERENCES `notes`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci

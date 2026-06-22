@@ -1,20 +1,20 @@
 <template>
   <aside class="sidebar">
     <div class="logo">
-      <el-icon :size="28" color="#fff"><Clock /></el-icon>
+      <el-icon :size="28" color="var(--sidebar-text)"><Clock /></el-icon>
       <span class="logo-text">TimeBlock</span>
     </div>
     <nav class="nav-menu">
       <router-link
-        v-for="route in menuRoutes"
-        :key="route.path"
-        :to="route.path"
-        :class="['nav-item', { active: $route.path === route.path }]"
+        v-for="item in menuItems"
+        :key="item.path"
+        :to="item.path"
+        :class="['nav-item', { active: $route.path === item.path }]"
       >
         <el-icon :size="18">
-          <component :is="route.meta.icon" />
+          <component :is="item.icon" />
         </el-icon>
-        <span>{{ route.meta.title }}</span>
+        <span>{{ item.label }}</span>
       </router-link>
     </nav>
   </aside>
@@ -23,13 +23,16 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import router from '../../router'
+import { Clock, EditPen, DataAnalysis, Setting } from '@element-plus/icons-vue'
 
 const $route = useRoute()
 
-const menuRoutes = computed(() =>
-  router.getRoutes().filter(r => r.meta?.title)
-)
+// 侧边栏菜单项（固定三项：记录 / 统计 / 设置�?
+const menuItems = computed(() => [
+  { path: '/record', label: '记录', icon: EditPen },
+  { path: '/stats', label: '统计', icon: DataAnalysis },
+  { path: '/settings', label: '设置', icon: Setting }
+])
 </script>
 
 <style lang="scss" scoped>
@@ -47,10 +50,10 @@ const menuRoutes = computed(() =>
   align-items: center;
   justify-content: center;
   gap: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--sidebar-border);
 
   .logo-text {
-    color: #fff;
+    color: var(--sidebar-text);
     font-size: 18px;
     font-weight: 600;
   }
@@ -66,18 +69,18 @@ const menuRoutes = computed(() =>
   align-items: center;
   gap: 12px;
   padding: 14px 24px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--sidebar-text);
   text-decoration: none;
   transition: all 0.3s;
   cursor: pointer;
 
   &:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-on-primary);
+    background: var(--bg-hover-soft);
   }
 
   &.active {
-    color: #fff;
+    color: var(--text-on-primary);
     background: var(--primary-color);
   }
 }

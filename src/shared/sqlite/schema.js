@@ -11,7 +11,7 @@
  *
  * 共 6 张表:
  *   1. users          - 用户表
- *   2. categories      - 分类表
+ *   2. notes          - 便签表
  *   3. time_blocks     - 时间块表
  *   4. active_timers   - 计时器运行状态表
  *   5. sync_logs       - 同步记录表
@@ -39,24 +39,21 @@ const SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS idx_users_deleted ON users(deleted_at);`,
 
   // =============================================
-  // 2. categories 分类表
+  // 2. notes 便签表
   // =============================================
-  `CREATE TABLE IF NOT EXISTS categories (
+  `CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     name VARCHAR(100) NOT NULL,
-    color VARCHAR(7) NOT NULL DEFAULT '#1890ff',
-    icon VARCHAR(50) NULL DEFAULT NULL,
-    sort_order INTEGER NOT NULL DEFAULT 0,
+    color VARCHAR(7) NOT NULL DEFAULT '#409eff',
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
     updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
     deleted_at DATETIME NULL DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );`,
 
-  `CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);`,
-  `CREATE INDEX IF NOT EXISTS idx_categories_sort_order ON categories(user_id, sort_order);`,
-  `CREATE INDEX IF NOT EXISTS idx_categories_deleted ON categories(deleted_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_deleted ON notes(deleted_at);`,
 
   // =============================================
   // 3. time_blocks 时间块表
@@ -64,7 +61,7 @@ const SCHEMA_SQL = [
   `CREATE TABLE IF NOT EXISTS time_blocks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    category_id INTEGER NULL DEFAULT NULL,
+    note_id INTEGER NULL DEFAULT NULL,
     title VARCHAR(200) NOT NULL,
     description TEXT NULL DEFAULT NULL,
     start_time DATETIME NOT NULL,
@@ -74,17 +71,17 @@ const SCHEMA_SQL = [
     updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
     deleted_at DATETIME NULL DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE SET NULL
   );`,
 
   // 时间块索引（与 MySQL 设计文档一致）
   `CREATE INDEX IF NOT EXISTS idx_timeblocks_user_id ON time_blocks(user_id);`,
-  `CREATE INDEX IF NOT EXISTS idx_user_category ON time_blocks(user_id, category_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_user_note ON time_blocks(user_id, note_id);`,
   `CREATE INDEX IF NOT EXISTS idx_time_range ON time_blocks(user_id, start_time, end_time);`,
 
   // 日视图覆盖索引（零回表优化）
   `CREATE INDEX IF NOT EXISTS idx_user_date_covering ON time_blocks(
-    user_id, deleted_at, start_time, end_time, category_id, title, is_completed
+    user_id, deleted_at, start_time, end_time, note_id, title, is_completed
   );`,
 
   `CREATE INDEX IF NOT EXISTS idx_timeblocks_deleted ON time_blocks(deleted_at);`,
@@ -97,7 +94,7 @@ const SCHEMA_SQL = [
     user_id INTEGER NOT NULL PRIMARY KEY,
     time_block_id INTEGER NULL DEFAULT NULL,
     title VARCHAR(200) NOT NULL,
-    category_id INTEGER NULL DEFAULT NULL,
+    note_id INTEGER NULL DEFAULT NULL,
     started_at DATETIME NOT NULL,
     elapsed_paused INTEGER NOT NULL DEFAULT 0,
     is_paused INTEGER NOT NULL DEFAULT 0 CHECK(is_paused IN (0, 1)),
@@ -133,13 +130,13 @@ const SCHEMA_SQL = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     stat_date DATE NOT NULL,
-    category_id INTEGER NULL DEFAULT NULL,
+    note_id INTEGER NULL DEFAULT NULL,
     total_seconds INTEGER NOT NULL DEFAULT 0,
     block_count INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
-    UNIQUE(user_id, stat_date, category_id)
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE SET NULL,
+    UNIQUE(user_id, stat_date, note_id)
   );`,
 
   `CREATE INDEX IF NOT EXISTS idx_stat_user_date ON statistics(user_id, stat_date);`

@@ -4,6 +4,14 @@
   box-sizing: border-box;
 }
 
+// ---- 全局动画变量 ----
+:root {
+  --transition-duration-fast: 0.1s;
+  --transition-duration-normal: 0.2s;
+  --transition-duration-slow: 0.3s;
+  --transition-timing: ease-in-out;
+}
+
 body {
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', Arial, sans-serif;
@@ -12,6 +20,64 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+// ---- 全局 ease-in-out 动画（默认启用）----
+// 当 data-animation-disabled 存在时，所有过渡动画立即完成（duration=0）
+
+// 通用元素过渡
+a, button, [role="button"], input, textarea, select,
+.el-button, .el-input, .el-select, .el-switch, .el-radio-button,
+.el-card, .el-tag, .el-badge, .el-tooltip__trigger {
+  transition:
+    background-color var(--transition-duration-normal) var(--transition-timing),
+    border-color var(--transition-duration-normal) var(--transition-timing),
+    color var(--transition-duration-normal) var(--transition-timing),
+    box-shadow var(--transition-duration-normal) var(--transition-timing),
+    opacity var(--transition-duration-normal) var(--transition-timing),
+    transform var(--transition-duration-normal) var(--transition-timing);
+}
+
+// 容器/卡片类元素过渡
+.el-card, .el-dialog, .el-drawer, .el-popover,
+.view-container, .view-header, .settings-content,
+.settings-form, .sync-stats, .data-actions, .action-card,
+.category-item, .category-list {
+  transition:
+    opacity var(--transition-duration-slow) var(--transition-timing),
+    transform var(--transition-duration-slow) var(--transition-timing);
+}
+
+// 列表项/时间块过渡（用于视图切换时的淡入效果）
+.el-col, .el-row, .el-table-row,
+.time-block-item, .task-pool-item {
+  transition:
+    opacity var(--transition-duration-normal) var(--transition-timing),
+    transform var(--transition-duration-normal) var(--transition-timing),
+    background-color var(--transition-duration-fast) var(--transition-timing);
+}
+
+// 侧边栏导航过渡
+.el-menu-item, .el-sub-menu__title {
+  transition:
+    background-color var(--transition-duration-fast) var(--transition-timing),
+    color var(--transition-duration-fast) var(--transition-timing),
+    transform var(--transition-duration-fast) var(--transition-timing);
+}
+
+// 表单控件聚焦过渡
+.el-input__wrapper, .el-textarea__inner {
+  transition:
+    border-color var(--transition-duration-fast) var(--transition-timing),
+    box-shadow var(--transition-duration-fast) var(--transition-timing);
+}
+
+// 标签页切换过渡
+.el-tabs__header, .el-tabs__item {
+  transition:
+    color var(--transition-duration-fast) var(--transition-timing),
+    border-color var(--transition-duration-fast) var(--transition-timing);
+}
+
+// 滚动条平滑滚动
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -24,10 +90,38 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 3px;
+  transition: background var(--transition-duration-fast) var(--transition-timing);
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
+}
+
+// 视图容器进入动画
+.view-container {
+  animation: viewFadeIn var(--transition-duration-slow) var(--transition-timing);
+}
+
+@keyframes viewFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ---- 动画禁用模式 ----
+[data-animation-disabled] *,
+[data-animation-disabled] *::before,
+[data-animation-disabled] *::after,
+[data-animation-disabled] {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-delay: 0s !important;
 }
 
 .view-container {

@@ -1,4 +1,4 @@
-const { TimeBlock, Category } = require('../models')
+﻿const { TimeBlock, Note } = require('../models')
 const { success, paginated, error } = require('../utils/response')
 const { Op } = require('sequelize')
 
@@ -9,7 +9,7 @@ const { Op } = require('sequelize')
 async function list(req, res, next) {
   try {
     const {
-      startDate, endDate, categoryId,
+      startDate, endDate, noteId,
       page = 1, pageSize = 20
     } = req.query
 
@@ -24,8 +24,8 @@ async function list(req, res, next) {
       where.end_time = { [Op.lte]: new Date(endDate) }
     }
 
-    if (categoryId) {
-      where.category_id = parseInt(categoryId)
+    if (noteId) {
+      where.note_id = parseInt(noteId)
     }
 
     const offset = (parseInt(page) - 1) * parseInt(pageSize)
@@ -34,8 +34,8 @@ async function list(req, res, next) {
     const { count, rows } = await TimeBlock.findAndCountAll({
       where,
       include: [{
-        model: Category,
-        as: 'category',
+        model: Note,
+        as: 'note',
         attributes: ['id', 'name', 'color']
       }],
       order: [['start_time', 'ASC']],
@@ -47,11 +47,11 @@ async function list(req, res, next) {
       id: tb.id,
       title: tb.title,
       description: tb.description,
-      categoryId: tb.category_id,
-      category: tb.category ? {
-        id: tb.category.id,
-        name: tb.category.name,
-        color: tb.category.color
+      noteId: tb.note_id,
+      note: tb.note ? {
+        id: tb.note.id,
+        name: tb.note.name,
+        color: tb.note.color
       } : null,
       startTime: tb.start_time,
       endTime: tb.end_time,
@@ -78,7 +78,7 @@ async function list(req, res, next) {
  */
 async function search(req, res, next) {
   try {
-    const { keyword, startDate, endDate, categoryId } = req.query
+    const { keyword, startDate, endDate, noteId } = req.query
 
     const where = { user_id: req.user.id }
 
@@ -94,15 +94,15 @@ async function search(req, res, next) {
       where.end_time = { [Op.lte]: new Date(endDate) }
     }
 
-    if (categoryId) {
-      where.category_id = parseInt(categoryId)
+    if (noteId) {
+      where.note_id = parseInt(noteId)
     }
 
     const rows = await TimeBlock.findAll({
       where,
       include: [{
-        model: Category,
-        as: 'category',
+        model: Note,
+        as: 'note',
         attributes: ['id', 'name', 'color']
       }],
       order: [['start_time', 'DESC']],
@@ -113,11 +113,11 @@ async function search(req, res, next) {
       id: tb.id,
       title: tb.title,
       description: tb.description,
-      categoryId: tb.category_id,
-      category: tb.category ? {
-        id: tb.category.id,
-        name: tb.category.name,
-        color: tb.category.color
+      noteId: tb.note_id,
+      note: tb.note ? {
+        id: tb.note.id,
+        name: tb.note.name,
+        color: tb.note.color
       } : null,
       startTime: tb.start_time,
       endTime: tb.end_time,
@@ -140,23 +140,23 @@ async function search(req, res, next) {
 async function create(req, res, next) {
   try {
     const {
-      title, description, categoryId,
+      title, description, noteId,
       startTime, endTime, isCompleted
     } = req.body
 
-    // 验证分类归属
-    if (categoryId) {
-      const category = await Category.findOne({
-        where: { id: categoryId, user_id: req.user.id }
+    // 验证便签归属
+    if (noteId) {
+      const note = await Note.findOne({
+        where: { id: noteId, user_id: req.user.id }
       })
-      if (!category) {
-        return error(res, 'NOT_FOUND', '所属分类不存在', 404)
+      if (!note) {
+        return error(res, 'NOT_FOUND', '所属便签不存在', 404)
       }
     }
 
     const timeBlock = await TimeBlock.create({
       user_id: req.user.id,
-      category_id: categoryId || null,
+      note_id: noteId || null,
       title,
       description: description || null,
       start_time: new Date(startTime),
@@ -164,11 +164,11 @@ async function create(req, res, next) {
       is_completed: isCompleted || false
     })
 
-    // 关联查询分类信息
+    // 关联查询便签信息
     const result = await TimeBlock.findByPk(timeBlock.id, {
       include: [{
-        model: Category,
-        as: 'category',
+        model: Note,
+        as: 'note',
         attributes: ['id', 'name', 'color']
       }]
     })
@@ -177,11 +177,11 @@ async function create(req, res, next) {
       id: result.id,
       title: result.title,
       description: result.description,
-      categoryId: result.category_id,
-      category: result.category ? {
-        id: result.category.id,
-        name: result.category.name,
-        color: result.category.color
+      noteId: result.note_id,
+      note: result.note ? {
+        id: result.note.id,
+        name: result.note.name,
+        color: result.note.color
       } : null,
       startTime: result.start_time,
       endTime: result.end_time,
@@ -203,7 +203,7 @@ async function update(req, res, next) {
   try {
     const { id } = req.params
     const {
-      title, description, categoryId,
+      title, description, noteId,
       startTime, endTime, isCompleted
     } = req.body
 
@@ -215,20 +215,20 @@ async function update(req, res, next) {
       return error(res, 'NOT_FOUND', '时间块不存在', 404)
     }
 
-    // 验证分类归属
-    if (categoryId) {
-      const category = await Category.findOne({
-        where: { id: categoryId, user_id: req.user.id }
+    // 验证便签归属
+    if (noteId) {
+      const note = await Note.findOne({
+        where: { id: noteId, user_id: req.user.id }
       })
-      if (!category) {
-        return error(res, 'NOT_FOUND', '所属分类不存在', 404)
+      if (!note) {
+        return error(res, 'NOT_FOUND', '所属便签不存在', 404)
       }
     }
 
     const updates = {}
     if (title !== undefined) updates.title = title
     if (description !== undefined) updates.description = description
-    if (categoryId !== undefined) updates.category_id = categoryId
+    if (noteId !== undefined) updates.note_id = noteId
     if (startTime !== undefined) updates.start_time = new Date(startTime)
     if (endTime !== undefined) updates.end_time = new Date(endTime)
     if (isCompleted !== undefined) updates.is_completed = isCompleted
@@ -237,8 +237,8 @@ async function update(req, res, next) {
 
     const result = await TimeBlock.findByPk(timeBlock.id, {
       include: [{
-        model: Category,
-        as: 'category',
+        model: Note,
+        as: 'note',
         attributes: ['id', 'name', 'color']
       }]
     })
@@ -247,11 +247,11 @@ async function update(req, res, next) {
       id: result.id,
       title: result.title,
       description: result.description,
-      categoryId: result.category_id,
-      category: result.category ? {
-        id: result.category.id,
-        name: result.category.name,
-        color: result.category.color
+      noteId: result.note_id,
+      note: result.note ? {
+        id: result.note.id,
+        name: result.note.name,
+        color: result.note.color
       } : null,
       startTime: result.start_time,
       endTime: result.end_time,
