@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TimeBlock</string>
+    <string name="title_activity_main">TimeBlock</string>
+    <string name="package_name">com.timeblock.app</string>
+    <string name="custom_url_scheme">com.timeblock.app</string>
+</resources>

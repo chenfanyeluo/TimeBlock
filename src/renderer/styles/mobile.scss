@@ -1,0 +1,195 @@
+/**
+ * 移动端专用样式
+ *
+ * 适配 Capacitor 移动端应用，优化触摸交互和布局
+ */
+
+// 移动端断点（<768px）
+$mobile-breakpoint: 768px;
+
+// 全局移动端样式
+@media screen and (max-width: $mobile-breakpoint) {
+  // View 容器优化
+  .view-container {
+    padding: 12px;
+
+    .view-header {
+      h2 {
+        font-size: 18px;
+        margin-bottom: 12px;
+      }
+    }
+  }
+
+  // Element Plus Tabs 优化
+  .el-tabs--border-card {
+    border: none;
+    box-shadow: none;
+
+    .el-tabs__header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .el-tabs__item {
+      font-size: 14px;
+      padding: 0 12px;
+      height: 40px;
+    }
+
+    .el-tabs__content {
+      padding: 12px;
+    }
+  }
+
+  // Element Plus Form 优化
+  .el-form {
+    .el-form-item {
+      margin-bottom: 16px;
+
+      .el-form-item__label {
+        font-size: 14px;
+        padding-bottom: 4px;
+        line-height: 20px;
+      }
+
+      .el-form-item__content {
+        line-height: 32px;
+      }
+    }
+  }
+
+  // Element Plus Button 优化（触摸友好）
+  .el-button {
+    min-height: 44px; // iOS 规范最小触摸区域
+    min-width: 80px; // 防止按钮挤压变形
+    padding: 12px 20px;
+    font-size: 16px;
+    white-space: nowrap; // 防止文字换行导致挤压
+
+    &+.el-button {
+      margin-left: 8px;
+    }
+
+    // 小按钮优化
+    &.el-button--small {
+      min-height: 36px;
+      min-width: 60px;
+      padding: 8px 16px;
+      font-size: 14px;
+    }
+
+    // 圆形按钮特殊处理yejuzhong
+    &.is-circle {
+      min-width: 44px; // 圆形按钮宽度等于高度
+      padding: 12px;
+    }
+  }
+
+  // Element Plus Switch 优化
+  .el-switch {
+    height: 32px;
+
+    .el-switch__core {
+      min-width: 50px;
+      height: 32px;
+    }
+  }
+
+  // Element Plus Select 优化
+  .el-select {
+    width: 100%;
+
+    .el-input__inner {
+      height: 44px;
+      font-size: 16px;
+    }
+  }
+
+  // Element Plus Row/Col 优化
+  .el-row {
+    .el-col {
+      margin-bottom: 12px;
+    }
+  }
+
+  // Element Plus Alert 优化
+  .el-alert {
+    padding: 12px;
+    margin-bottom: 16px;
+
+    .el-alert__title {
+      font-size: 14px;
+    }
+
+    .el-alert__description {
+      font-size: 12px;
+      margin-top: 4px;
+    }
+  }
+
+  // Element Plus Statistic 优化
+  .el-statistic {
+    .el-statistic__head {
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .el-statistic__number {
+      font-size: 20px;
+    }
+  }
+
+  // 移动端卡片优化
+  .settings-content {
+    .sync-info,
+    .sync-stats,
+    .theme-section,
+    .animation-section {
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+    }
+  }
+}
+
+// Capacitor 专用优化（原生 App）
+.platform-capacitor {
+  // 更大的触摸区域
+  .el-button {
+    min-height: 48px;
+    padding: 14px 24px;
+  }
+
+  // 禁用 hover 效果（触摸设备无需 hover）
+  .el-button:hover,
+  .el-tabs__item:hover,
+  .el-select:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  // 活跃状态反馈
+  .el-button:active {
+    transform: scale(0.98);
+  }
+
+  // 优化滚动体验
+  .view-container,
+  .main-content {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+}
+
+// iOS 安全区域适配
+@supports (padding: env(safe-area-inset-bottom)) {
+  .mobile-content {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-tabbar {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

@@ -16,7 +16,8 @@ export default defineConfig({
       '@components': path.join(__dirname, 'src', 'renderer', 'components'),
       '@views': path.join(__dirname, 'src', 'renderer', 'views'),
       '@stores': path.join(__dirname, 'src', 'renderer', 'stores'),
-      '@utils': path.join(__dirname, 'src', 'renderer', 'utils')
+      '@utils': path.join(__dirname, 'src', 'renderer', 'utils'),
+      '@shared': path.join(__dirname, 'src', 'shared')
     }
   }
 })

@@ -4,17 +4,32 @@
       <h2>设置</h2>
     </div>
 
-    <div class="settings-content">
+    <!-- 移动端:竖向列表式设置选项（点击跳转到子页面） -->
+    <div class="settings-content mobile-settings-list" v-if="isMobile">
+      <div
+        v-for="item in settingItems"
+        :key="item.key"
+        class="setting-item-card"
+        @click="openSettingDetail(item.key)"
+      >
+        <div class="item-icon">
+          <el-icon :size="24"><component :is="item.icon" /></el-icon>
+        </div>
+        <div class="item-content">
+          <h4 class="item-title">{{ item.label }}</h4>
+          <p class="item-desc">{{ item.description }}</p>
+        </div>
+        <div class="item-arrow">
+          <el-icon :size="20"><ArrowRight /></el-icon>
+        </div>
+      </div>
+    </div>
+
+    <!-- PC端:横向Tabs布局 -->
+    <div class="settings-content desktop-tabs" v-else>
       <el-tabs type="border-card">
         <el-tab-pane label="数据与同步">
           <!-- 同步设置 -->
-          <div class="sync-info">
-            <el-alert title="双数据库同步方案" type="info" :closable="false" show-icon>
-              <template #default>
-                <p>本地使用 SQLite 存储，云端使用 MySQL 存储，支持双向同步。</p>
-              </template>
-            </el-alert>
-          </div>
           <el-form label-width="120px" class="settings-form">
             <el-form-item label="同步状态">
               <el-tag :type="isOnline ? 'success' : 'warning'">
@@ -146,13 +161,6 @@
 
         <el-tab-pane label="通用设置">
           <el-form label-width="120px" class="settings-form">
-            <el-form-item label="时间粒度">
-              <el-radio-group v-model="timeGranularity">
-                <el-radio-button label="5">5分钟</el-radio-button>
-                <el-radio-button label="15">15分钟</el-radio-button>
-                <el-radio-button label="30">30分钟</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
             <el-form-item label="默认视图">
               <el-radio-group v-model="defaultView">
                 <el-radio-button label="record">记录</el-radio-button>
@@ -206,12 +214,74 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { Delete, Plus, Download, Upload } from '@element-plus/icons-vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { Delete, Plus, Download, Upload, ArrowRight, Connection, User, Tickets, Setting, Brush, FolderOpened } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useTimeBlockStore } from '@stores/timeBlock'
 
+const router = useRouter()
 const store = useTimeBlockStore()
+
+// 移动端判断
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 799
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
+
+// 设置项列表(移动端竖向列表)
+const settingItems = [
+  {
+    key: 'sync',
+    label: '数据与同步',
+    description: '同步状态、自动同步、同步间隔设置',
+    icon: Connection
+  },
+  {
+    key: 'account',
+    label: '账号管理',
+    description: '登录注册、用户资料管理',
+    icon: User
+  },
+  {
+    key: 'notes',
+    label: '便签管理',
+    description: '添加、编辑、删除便签分类',
+    icon: Tickets
+  },
+  {
+    key: 'general',
+    label: '通用设置',
+    description: '默认视图、其他通用选项',
+    icon: Setting
+  },
+  {
+    key: 'appearance',
+    label: '外观设置',
+    description: '主题切换、UI动画效果',
+    icon: Brush
+  },
+  {
+    key: 'data',
+    label: '数据管理',
+    description: '数据导出、导入、清除',
+    icon: FolderOpened
+  }
+]
+
+// 移动端：使用路由跳转到子页面
+function openSettingDetail(key) {
+  router.push(`/settings/${key}`)
+}
 
 // 数据同步相关
 const isOnline = ref(navigator.onLine)
@@ -237,7 +307,6 @@ const userInfo = ref({
 })
 
 const isLoggedIn = ref(false)
-const timeGranularity = ref('15')
 const defaultView = ref('record')
 
 // 主题选项（含预览色）
@@ -282,19 +351,21 @@ const themeOptions = [
 const themeLabels = Object.fromEntries(themeOptions.map(t => [t.value, t.label]))
 
 // 主题切换（通过 store.setTheme 写回 + 持久化）
-function handleThemeChange(val) {
-  store.setTheme(val)
+async function handleThemeChange(val) {
+  await store.setTheme(val)
   ElMessage.success(`主题已切换为：${themeLabels[val] || val}`)
 }
 
 // 动画开关（从 store 读取）
 const animationEnabled = computed({
   get: () => store.animationEnabled,
-  set: (val) => store.setAnimationEnabled(val)
+  set: async (val) => {
+    await store.setAnimationEnabled(val)
+  }
 })
 
-function handleAnimationChange(val) {
-  store.setAnimationEnabled(val)
+async function handleAnimationChange(val) {
+  await store.setAnimationEnabled(val)
   ElMessage.success(val ? 'UI 动画已开启' : 'UI 动画已关闭（性能模式）')
 }
 
@@ -392,6 +463,77 @@ function clearAllData() {
 </script>
 
 <style lang="scss" scoped>
+// PC端保持原样
+.desktop-tabs {
+  height: calc(100% - 60px);
+  overflow: auto;
+}
+
+// 移动端竖向列表样式
+.mobile-settings-list {
+  height: calc(100% - 50px);
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .setting-item-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-lighter);
+
+    &:active {
+      transform: scale(0.98);
+      background: var(--bg-hover-soft);
+    }
+
+    .item-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-light);
+      border-radius: 8px;
+      color: var(--primary-color);
+      flex-shrink: 0;
+    }
+
+    .item-content {
+      flex: 1;
+      min-width: 0;
+
+      .item-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0 0 4px 0;
+      }
+
+      .item-desc {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    .item-arrow {
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+  }
+}
+
 .settings-content {
   height: calc(100% - 60px);
   overflow: auto;

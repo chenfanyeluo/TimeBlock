@@ -2,6 +2,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import DayView from '@views/DayView.vue'
 import StatsView from '@views/StatsView.vue'
 import SettingsView from '@views/SettingsView.vue'
+import SettingsDetailView from '@views/SettingsDetailView.vue'
 
 const routes = [
   {
@@ -25,6 +26,13 @@ const routes = [
     name: 'Settings',
     component: SettingsView,
     meta: { title: '设置', icon: 'Setting' }
+  },
+  // 子设置页面（移动端使用页面跳转）
+  {
+    path: '/settings/:key',
+    name: 'SettingsDetail',
+    component: SettingsDetailView,
+    meta: { title: '设置详情', icon: 'Setting', hidden: true }
   }
 ]
 

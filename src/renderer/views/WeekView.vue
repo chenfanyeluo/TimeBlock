@@ -36,7 +36,14 @@
           v-for="day in weekDays"
           :key="day.date"
           class="day-column"
+          :class="{ today: day.isToday }"
         >
+          <!-- 移动端日期标题 -->
+          <div class="day-title-mobile">
+            <span class="day-name-mobile">{{ day.name }}</span>
+            <span class="day-date-mobile">{{ day.dateStr }}</span>
+          </div>
+
           <div v-for="hour in 24" :key="hour - 1" class="hour-cell"></div>
 
           <TimeBlockItem
@@ -111,7 +118,7 @@ function updateBlock(id, updates) {
 </script>
 
 <style lang="scss" scoped>
-// ---- 外层容器（与 MonthView / YearView 统一） ----
+// ---- 外层容器(与 MonthView / YearView 统一) ----
 .week-view-content {
   display: flex;
   flex-direction: column;
@@ -120,7 +127,7 @@ function updateBlock(id, updates) {
   overflow: auto;
 }
 
-// ---- 周导航工具栏（与 MonthView / YearView 统一） ----
+// ---- 周导航工具栏(与 MonthView / YearView 统一) ----
 .week-toolbar {
   display: flex;
   align-items: center;
@@ -139,7 +146,7 @@ function updateBlock(id, updates) {
   }
 }
 
-// ---- 周网格卡片（类似 MonthView 的 calendar-card） ----
+// ---- 周网格卡片(类似 MonthView 的 calendar-card) ----
 .week-grid-card {
   display: flex;
   flex-direction: column;
@@ -220,6 +227,136 @@ function updateBlock(id, updates) {
 
   &:hover {
     background: var(--bg-hover);
+  }
+}
+
+// =============================================
+// 移动端竖屏布局优化
+// =============================================
+@media screen and (max-width: 799px) {
+  .week-view-content {
+    gap: 12px;
+    padding: 8px;
+  }
+
+  .week-nav {
+    gap: 6px;
+
+    .current-week {
+      font-size: 14px;
+      min-width: 140px;
+    }
+  }
+
+  // 周网格改为纵向堆叠布局
+  .week-grid-card {
+    // 改为纵向堆叠容器
+    .week-header {
+      display: none; // 移动端隐藏横向表头
+    }
+
+    .week-body {
+      flex-direction: column; // 改为纵向排列
+      gap: 12px;
+      padding: 8px;
+    }
+
+    .time-column {
+      display: none; // 移动端隐藏时间列,每个day-card内部显示时间轴
+    }
+
+    // 每天改为独立卡片
+    .day-column {
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid var(--border-light);
+      min-height: auto;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      background: var(--bg-primary);
+      padding: 8px;
+      position: relative;
+
+      // 移动端日期标题(只在移动端显示)
+      .day-title-mobile {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border-lighter);
+        margin-bottom: 8px;
+
+        .day-name-mobile {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+
+        .day-date-mobile {
+          font-size: 12px;
+          color: var(--text-secondary);
+        }
+      }
+
+      // 今天特殊样式
+      &.today .day-title-mobile {
+        background: var(--primary-light);
+
+        .day-name-mobile {
+          color: var(--primary-color);
+        }
+
+        .day-date-mobile {
+          color: var(--primary-color);
+          font-weight: 600;
+        }
+      }
+
+      &:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  // 时间标签优化
+  .time-label {
+    height: 40px;
+    font-size: 10px;
+  }
+
+  // 小时格子优化
+  .hour-cell {
+    height: 40px;
+  }
+}
+
+// PC端隐藏移动端日期标题
+@media screen and (min-width: 800px) {
+  .day-title-mobile {
+    display: none;
+  }
+}
+
+// 超小屏幕
+@media screen and (max-width: 480px) {
+  .week-nav {
+    .current-week {
+      font-size: 12px;
+      min-width: 100px;
+    }
+  }
+
+  .week-grid-card {
+    .day-column {
+      padding: 6px;
+      margin-bottom: 8px;
+
+      &:before {
+        padding: 6px 8px;
+        font-size: 12px;
+      }
+    }
   }
 }
 </style>

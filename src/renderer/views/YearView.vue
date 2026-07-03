@@ -90,9 +90,8 @@
             </el-select>
             <!-- 图例 -->
             <div class="heat-legend">
-              <span>时长</span>
+              <span>热度值</span>
               <span v-for="lvl in 4" :key="lvl" class="legend-box" :style="{ background: getLegendColor(lvl) }"></span>
-              <span>时间</span>
             </div>
           </div>
         </div>

@@ -12,21 +12,38 @@
 const path = require('path')
 const fs = require('fs')
 
-// 动态解析 sql.js 路径（兼容从不同目录调用）
-// sql.js 安装在 server/node_modules，需显式指定路径
+// 动态解析 sql.js 径（兼容从不同目录调用）
+// sql.js 可能在项目根目录 node_modules 或 server/node_modules
 let initSqlJs
-try {
-  initSqlJs = require('sql.js')
-} catch (_) {
-  const sqlJsPath = path.join(__dirname, '..', '..', 'server', 'node_modules', 'sql.js')
+let sqlJsDistPath = null
+
+// 使用绝对路径查找 sql.js
+const possiblePaths = [
+  // 项目根目录 node_modules
+  path.join(__dirname, '..', '..', '..', 'node_modules', 'sql.js'),
+  // src/server/node_modules
+  path.join(__dirname, '..', '..', 'server', 'node_modules', 'sql.js'),
+  // 当前目录的 node_modules（如果直接在 server 目录运行）
+  path.join(__dirname, '..', 'node_modules', 'sql.js')
+]
+
+for (const sqlJsPath of possiblePaths) {
   try {
-    initSqlJs = require(sqlJsPath)
+    if (fs.existsSync(path.join(sqlJsPath, 'package.json'))) {
+      initSqlJs = require(sqlJsPath)
+      sqlJsDistPath = path.join(sqlJsPath, 'dist')
+      console.log('[SQLite] 找到 sql.js:', sqlJsPath)
+      break
+    }
   } catch (e) {
-    throw new Error(
-      '[SQLite] 找不到 sql.js 模块。请在项目根目录执行: npm install sql.js\n' +
-      '安装位置: src/server/node_modules/sql.js'
-    )
+    // 继续尝试下一个路径
   }
+}
+
+if (!initSqlJs) {
+  throw new Error(
+    '[SQLite] 找不到 sql.js 模块。请在项目根目录执行: npm install sql.js'
+  )
 }
 
 /** @type {import('sql.js').Database|null} */
@@ -59,13 +76,7 @@ async function init(options = {}) {
     fs.mkdirSync(dbDir, { recursive: true })
   }
 
-  // 加载 sql.js WASM（定位 WASM 文件的绝对路径）
-  let sqlJsDistPath
-  try {
-    sqlJsDistPath = path.dirname(require.resolve('sql.js/package.json'))
-  } catch (_) {
-    sqlJsDistPath = path.join(__dirname, '..', '..', 'server', 'node_modules', 'sql.js', 'dist')
-  }
+  // 加载 sql.js WASM（使用预先解析的路径）
   const SQL = await initSqlJs({
     locateFile: (file) => path.join(sqlJsDistPath, file)
   })

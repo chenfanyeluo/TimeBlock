@@ -8,12 +8,16 @@
       'is-multi': isMulti,
       'selected': selected,
       'will-recycle': isDragging && isOverPool,
-      'compact': isCompact
+      'compact': isCompact,
+      'mobile-dragging': _isMobileBlockDragging
     }"
     :style="finalStyle"
     @mousedown="handleMouseDown"
     @click.stop="handleClick"
     @dblclick.stop="handleDblClick"
+    @touchstart="onBlockTouchStart"
+    @touchmove="onBlockTouchMove"
+    @touchend="onBlockTouchEnd"
   >
     <!-- 紧凑模式（小块）：单行显示所有内容 -->
     <template v-if="isCompact">
@@ -76,7 +80,7 @@ const props = defineProps({
   selected: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update', 'delete', 'select', 'recycle', 'drag-over-pool'])
+const emit = defineEmits(['update', 'delete', 'select', 'recycle', 'drag-over-pool', 'mobile-block-drag-start', 'mobile-block-drag-move', 'mobile-block-drag-end'])
 
 const store = useTimeBlockStore()
 const blockRef = ref(null)
@@ -94,6 +98,19 @@ const resizeDeltaY = ref(0)     // resize 高度变化量
 // 原始数据快照
 const snapshotStartMin = ref(0)
 const snapshotEndMin = ref(0)
+
+// ---- 移动端触摸拖拽状态 ----
+let _mobileBlockDragTimer = null
+let _isMobileBlockDragging = false
+const MOBILE_BLOCK_DRAG_DELAY = 400 // 长按触发拖拽的延迟（毫秒）
+const isMobileDevice = ref(false) // 判断是否移动端
+
+// 检测是否为移动端
+function checkMobile() {
+  isMobileDevice.value = window.innerWidth < 768 || 'ontouchstart' in window
+}
+checkMobile()
+window.addEventListener('resize', checkMobile)
 
 // 使用 block 自带的颜色/名称（统一 noteXxx 字段）
 const categoryColor = computed(() =>
@@ -349,6 +366,69 @@ function onResizeEnd() {
 
   document.removeEventListener('mousemove', onResizeMove)
 }
+
+// ---- 移动端触摸拖拽（拖到便签栏回收）----
+
+/**
+ * 移动端：触摸开始，启动长按计时器
+ */
+function onBlockTouchStart(e) {
+  if (!isMobileDevice.value || e.touches.length !== 1) return
+  // 忽略 resize 手柄上的触摸
+  if (e.target.classList.contains('resize-handle')) return
+
+  const touch = e.touches[0]
+
+  // 启动长按计时器
+  _mobileBlockDragTimer = setTimeout(() => {
+    _isMobileBlockDragging = true
+    // 通知父组件开始拖拽
+    emit('mobile-block-drag-start', {
+      block: props.block,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      categoryColor: categoryColor.value,
+      categoryName: categoryName.value
+    })
+  }, MOBILE_BLOCK_DRAG_DELAY)
+}
+
+/**
+ * 移动端：触摸移动，如果在拖拽状态则通知父组件更新位置
+ */
+function onBlockTouchMove(e) {
+  if (!_isMobileBlockDragging || e.touches.length !== 1) return
+
+  e.preventDefault() // 拖拽时阻止页面滚动
+  const touch = e.touches[0]
+  emit('mobile-block-drag-move', {
+    clientX: touch.clientX,
+    clientY: touch.clientY
+  })
+}
+
+/**
+ * 移动端：触摸结束，结束拖拽并通知父组件
+ */
+function onBlockTouchEnd(e) {
+  // 清理长按计时器
+  if (_mobileBlockDragTimer) {
+    clearTimeout(_mobileBlockDragTimer)
+    _mobileBlockDragTimer = null
+  }
+
+  if (_isMobileBlockDragging) {
+    _isMobileBlockDragging = false
+    const touch = e.changedTouches[0]
+    emit('mobile-block-drag-end', {
+      block: props.block,
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+      categoryColor: categoryColor.value,
+      categoryName: categoryName.value
+    })
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -377,6 +457,14 @@ function onResizeEnd() {
 
   &.resizing {
     cursor: ns-resize;
+  }
+
+  // 移动端拖拽状态
+  &.mobile-dragging {
+    opacity: 0.6;
+    transform: scale(0.95);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    border-color: var(--success-color);
   }
 
   &.will-recycle {

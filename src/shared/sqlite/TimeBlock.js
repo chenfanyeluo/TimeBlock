@@ -56,7 +56,7 @@ class TimeBlockModel {
               tb.created_at, tb.updated_at,
               n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
+       LEFT JOIN notes n ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE tb.id = ? AND tb.deleted_at IS NULL;`,
       [id]
     )
@@ -181,7 +181,7 @@ class TimeBlockModel {
               tb.start_time, tb.end_time, tb.is_completed,
               n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
+       LEFT JOIN notes n ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE tb.user_id = ?
          AND tb.deleted_at IS NULL
          AND tb.start_time < ?
@@ -208,7 +208,7 @@ class TimeBlockModel {
               tb.start_time, tb.end_time, tb.is_completed,
               n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
+       LEFT JOIN notes n ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE tb.user_id = ?
          AND tb.deleted_at IS NULL
          AND tb.start_time < ?
@@ -238,7 +238,7 @@ class TimeBlockModel {
               tb.start_time, tb.end_time, tb.is_completed,
               n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
+       LEFT JOIN notes n ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE tb.user_id = ?
          AND tb.deleted_at IS NULL
          AND tb.start_time < ?
@@ -291,7 +291,7 @@ class TimeBlockModel {
               tb.created_at, tb.updated_at,
               n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
+       LEFT JOIN notes n ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE ${whereClause}
        ORDER BY tb.start_time DESC
        LIMIT ? OFFSET ?;`,
@@ -368,7 +368,7 @@ class TimeBlockModel {
               tb.start_time, tb.end_time, tb.is_completed,
               n.name AS note_name, n.color AS note_color
        FROM time_blocks tb
-       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
+       LEFT JOIN notes n ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE ${whereClause}
        ORDER BY tb.start_time DESC
        LIMIT ?;`,
@@ -396,7 +396,7 @@ class TimeBlockModel {
               CAST(SUM(CAST((julianday(tb.end_time) - julianday(tb.start_time)) * 86400 AS INTEGER)) AS INTEGER) AS total_seconds,
               COUNT(*) AS block_count
        FROM time_blocks tb
-       LEFT JOIN notes c ON tb.note_id = n.id AND n.deleted_at IS NULL
+       LEFT JOIN notes n ON tb.note_id = n.id AND n.deleted_at IS NULL
        WHERE tb.user_id = ?
          AND tb.deleted_at IS NULL
          AND tb.start_time >= ?

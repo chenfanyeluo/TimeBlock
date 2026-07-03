@@ -526,7 +526,7 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-// ---- 月份导航工具栏（始终显示）----
+// ---- 月份导航工具栏(始终显示)----
 .month-toolbar {
   display: flex;
   align-items: center;
@@ -584,6 +584,185 @@ onMounted(() => {
 .chart-card {
   .chart {
     height: 280px;
+  }
+}
+
+// =============================================
+// 移动端竖屏布局优化
+// =============================================
+@media screen and (max-width: 799px) {
+  .month-view-content {
+    gap: 12px;
+    padding: 8px;
+  }
+
+  .month-nav {
+    gap: 6px;
+
+    .current-month {
+      font-size: 14px;
+      min-width: 100px;
+    }
+  }
+
+  // 统计卡片改为单列纵向堆叠
+  .stats-cards {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .stat-card {
+    padding: 12px;
+
+    .stat-value {
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+    }
+  }
+
+  // 图表改为纵向排列
+  .charts-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .chart-card {
+    .chart {
+      height: 240px; // 移动端降低高度
+    }
+  }
+
+  // 月日历优化
+  .calendar-card {
+    .calendar-header {
+      padding: 0 8px;
+
+      span {
+        font-size: 13px;
+      }
+    }
+
+    // 日历网格保持7列,但优化样式
+    .cal-grid {
+      gap: 1px;
+    }
+
+    .cal-weekday {
+      font-size: 11px;
+      padding: 4px 0;
+    }
+
+    .cal-cell {
+      min-height: 60px; // 稍微压缩高度
+      padding: 2px 3px;
+
+      .cal-day-num {
+        font-size: 11px;
+      }
+
+      .cal-hours {
+        font-size: 9px;
+      }
+
+      // 便签分布区域优化
+      .cal-dist-area {
+        flex-direction: column; // 改为纵向排列
+        gap: 2px;
+      }
+
+      .dist-primary-name {
+        font-size: 10px;
+        padding: 2px 4px;
+      }
+
+      .dist-minors {
+        flex-direction: row; // 小色点改为横向排列
+        width: 100%;
+        height: auto;
+        gap: 2px;
+        padding-top: 0;
+      }
+
+      .dist-dot {
+        width: 8px;
+        height: 8px;
+      }
+    }
+
+    // 热力图优化
+    &.cal-grid-heatmap .cal-cell {
+      min-height: 30px;
+
+      .heat-day-num {
+        font-size: 8px;
+      }
+    }
+  }
+}
+
+// 超小屏幕
+@media screen and (max-width: 480px) {
+  .month-nav {
+    .current-month {
+      font-size: 12px;
+      min-width: 90px;
+    }
+  }
+
+  .stat-card {
+    padding: 10px;
+
+    .stat-value {
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+    }
+  }
+
+  .chart-card {
+    .chart {
+      height: 200px;
+    }
+  }
+
+  .calendar-card {
+    .cal-cell {
+      min-height: 50px;
+      padding: 1px 2px;
+
+      .cal-day-num {
+        font-size: 10px;
+      }
+
+      .cal-hours {
+        font-size: 8px;
+      }
+
+      .dist-primary-name {
+        font-size: 9px;
+        padding: 1px 2px;
+      }
+
+      .dist-dot {
+        width: 6px;
+        height: 6px;
+      }
+    }
+
+    &.cal-grid-heatmap .cal-cell {
+      min-height: 24px;
+
+      .heat-day-num {
+        font-size: 7px;
+      }
+    }
   }
 }
 
