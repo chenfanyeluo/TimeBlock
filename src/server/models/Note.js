@@ -25,6 +25,12 @@ const Note = sequelize.define('Note', {
     validate: {
       is: { args: /^#[0-9A-Fa-f]{6}$/, msg: '颜色格式不正确 (例: #409eff)' }
     }
+  },
+  deleted_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+    comment: '软删除时间'
   }
 }, {
   tableName: 'notes',

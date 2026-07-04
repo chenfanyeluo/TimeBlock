@@ -181,6 +181,78 @@ class UserModel {
       }
     }
   }
+
+  /**
+   * 保存密码重置令牌（哈希值）
+   *
+   * @param {number} id 用户ID
+   * @param {string} hashedToken 已哈希的重置令牌
+   * @param {number} ttlMs 有效期（毫秒），默认 1 小时
+   * @returns {boolean} 是否成功
+   */
+  saveResetToken(id, hashedToken, ttlMs = 60 * 60 * 1000) {
+    const expiresAt = new Date(Date.now() + ttlMs).toISOString()
+    const result = exec(
+      `UPDATE users SET reset_token = ?, reset_token_expires_at = ?
+       WHERE id = ? AND deleted_at IS NULL;`,
+      [hashedToken, expiresAt, id]
+    )
+    return result.changes > 0
+  }
+
+  /**
+   * 根据邮箱查找用户（含密码和重置令牌字段，用于密码重置流程）
+   *
+   * @param {string} email 邮箱地址
+   * @returns {Object|null} 用户对象（含 reset_token 相关字段）
+   */
+  findWithResetToken(email) {
+    return get(
+      `SELECT id, email, password, name, avatar,
+              reset_token, reset_token_expires_at,
+              created_at, updated_at
+       FROM users
+       WHERE email = ? AND deleted_at IS NULL;`,
+      [email]
+    )
+  }
+
+  /**
+   * 清除密码重置令牌
+   *
+   * @param {number} id 用户ID
+   * @returns {boolean} 是否成功
+   */
+  clearResetToken(id) {
+    const result = exec(
+      `UPDATE users SET reset_token = NULL, reset_token_expires_at = NULL
+       WHERE id = ?;`,
+      [id]
+    )
+    return result.changes > 0
+  }
+
+  /**
+   * 注销账号 — 软删除用户并脱敏
+   *
+   * @param {number} id 用户ID
+   * @returns {boolean} 是否成功
+   */
+  deleteAccount(id) {
+    const now = new Date().toISOString()
+    const result = exec(
+      `UPDATE users SET
+        deleted_at = ?,
+        email = 'deleted_' || ? || '_' || strftime('%s','now') || '@deleted.timeblock',
+        name = '已注销用户',
+        avatar = NULL,
+        reset_token = NULL,
+        reset_token_expires_at = NULL
+       WHERE id = ? AND deleted_at IS NULL;`,
+      [now, id, id]
+    )
+    return result.changes > 0
+  }
 }
 
 module.exports = new UserModel()

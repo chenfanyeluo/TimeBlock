@@ -30,6 +30,8 @@ const SCHEMA_SQL = [
     password VARCHAR(255) NOT NULL,
     name VARCHAR(100) NOT NULL,
     avatar VARCHAR(500) NULL DEFAULT NULL,
+    reset_token VARCHAR(255) NULL DEFAULT NULL,
+    reset_token_expires_at DATETIME NULL DEFAULT NULL,
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
     updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
     deleted_at DATETIME NULL DEFAULT NULL

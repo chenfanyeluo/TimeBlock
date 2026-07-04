@@ -38,6 +38,24 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(500),
     allowNull: true,
     defaultValue: null
+  },
+  reset_token: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    defaultValue: null,
+    comment: '密码重置令牌（哈希存储）'
+  },
+  reset_token_expires_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+    comment: '密码重置令牌过期时间'
+  },
+  deleted_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+    comment: '账号注销时间（软删除）'
   }
 }, {
   tableName: 'users',
