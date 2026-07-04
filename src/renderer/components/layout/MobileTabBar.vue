@@ -42,7 +42,10 @@ const menuItems = computed(() => [
   justify-content: space-around;
   align-items: center;
   z-index: 1000;
-  padding-bottom: env(safe-area-inset-bottom); // iOS 安全区域
+  // 底部安全区域留空（iOS 刘海屏 / Android 导航键区域）
+  padding-bottom: env(safe-area-inset-bottom);
+  // 总高度 = 56px + safe-area-inset-bottom（确保底部导航键不被遮挡）
+  min-height: calc(56px + env(safe-area-inset-bottom));
 }
 
 .tabbar-item {
