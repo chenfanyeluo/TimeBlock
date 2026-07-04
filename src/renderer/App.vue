@@ -20,7 +20,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { platformInfo } from '@shared/platform'
+import { platformInfo, database } from '@shared/platform'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import MobileTabBar from './components/layout/MobileTabBar.vue'
 
@@ -42,8 +42,38 @@ const isDesktop = computed(() => {
 // 判断是否显示移动端布局
 const isMobile = computed(() => !isDesktop.value)
 
-// 监听窗口尺寸变化（仅 Web 端）
-onMounted(() => {
+// 应用启动时初始化数据库
+onMounted(async () => {
+  // 初始化数据库（Electron/Capacitor 平台）
+  console.log('[App] 开始初始化数据库...')
+  console.log('[App] 当前平台:', platformInfo)
+  
+  try {
+    const success = await database.init()
+    if (success) {
+      console.log('[App] ✅ 数据库初始化成功')
+      
+      // 验证数据库可用性
+      const isValid = await database.validateDatabase()
+      if (isValid) {
+        console.log('[App] ✅ 数据库验证成功')
+        
+        // 获取数据库详细信息（调试）
+        const debugInfo = await database.getDebugInfo()
+        console.log('[App] 数据库详细信息:', debugInfo)
+      } else {
+        console.error('[App] ❌ 数据库验证失败')
+      }
+    } else {
+      console.warn('[App] ⚠️ 数据库初始化失败或不支持')
+      console.warn('[App] 平台可能不支持本地数据库（Web端）')
+    }
+  } catch (err) {
+    console.error('[App] ❌ 数据库初始化异常:', err)
+    console.error('[App] 错误堆栈:', err.stack)
+  }
+  
+  // Web 端监听窗口尺寸变化
   if (!platformInfo.isElectron && !platformInfo.isCapacitor) {
     window.addEventListener('resize', () => {
       windowWidth.value = window.innerWidth

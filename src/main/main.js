@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
+const fs = require('fs')
 const sqlite = require('../shared/sqlite')
 
 /** @type {BrowserWindow|null} */
@@ -38,8 +39,32 @@ function createWindow() {
  */
 async function initDatabase() {
   try {
+    // 根据打包状态选择数据库路径
+    let dbPath
+    
+    if (app.isPackaged) {
+      // 生产环境（打包后）：使用应用目录，随应用卸载删除
+      // Windows: 应用exe所在目录\data\timeblock_local.db
+      // macOS: /Applications/TimeBlock.app/Contents/Resources/data/
+      // Linux: /opt/TimeBlock/data/
+      const appPath = app.getAppPath()
+      const dataDir = path.join(appPath, 'data')
+      
+      // 确保数据目录存在
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true })
+      }
+      
+      dbPath = path.join(dataDir, 'timeblock_local.db')
+      console.log('[Main] 生产环境 - 应用目录数据库:', dbPath)
+    } else {
+      // 开发环境：使用用户数据目录（方便调试，不影响开发时的应用更新）
+      const userDataPath = app.getPath('userData')
+      dbPath = path.join(userDataPath, 'timeblock_local.db')
+      console.log('[Main] 开发环境 - 用户数据目录:', dbPath)
+    }
+    
     // 初始化 SQLite 数据库
-    const dbPath = path.join(__dirname, '..', 'server', 'data', 'timeblock_local.db')
     await sqlite.init({ dbPath })
     console.log('[Main] SQLite 数据库初始化成功')
 
