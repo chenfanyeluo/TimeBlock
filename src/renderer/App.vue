@@ -19,7 +19,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { App } from '@capacitor/app'
 import { platformInfo, database } from '@shared/platform'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import MobileTabBar from './components/layout/MobileTabBar.vue'
@@ -41,6 +42,36 @@ const isDesktop = computed(() => {
 
 // 判断是否显示移动端布局
 const isMobile = computed(() => !isDesktop.value)
+
+/**
+ * 应用暂停时保存数据（进入后台）
+ */
+async function handleAppPause() {
+  console.log('[App] 应用暂停，保存数据库...')
+  try {
+    // ⚠️ 性能优化：应用暂停时立即执行 checkpoint（immediate=true）
+    await database.checkpoint(true)
+    console.log('[App] ✅ 数据已持久化')
+  } catch (err) {
+    console.error('[App] ❌ 数据持久化失败:', err)
+  }
+}
+
+/**
+ * 应用退出时关闭数据库
+ */
+async function handleAppExit() {
+  console.log('[App] 应用退出，关闭数据库...')
+  try {
+    // ⚠️ 性能优化：应用退出时立即执行 checkpoint（immediate=true）
+    await database.checkpoint(true)
+    // 关闭数据库连接
+    await database.close()
+    console.log('[App] ✅ 数据库已关闭')
+  } catch (err) {
+    console.error('[App] ❌ 数据库关闭失败:', err)
+  }
+}
 
 // 应用启动时初始化数据库
 onMounted(async () => {
@@ -73,11 +104,36 @@ onMounted(async () => {
     console.error('[App] 错误堆栈:', err.stack)
   }
   
+  // Capacitor 移动端：监听应用生命周期事件
+  if (platformInfo.isCapacitor) {
+    // 应用暂停（进入后台）
+    App.addListener('appPause', handleAppPause)
+    
+    // 应用退出（关闭应用）
+    App.addListener('appExit', handleAppExit)
+    
+    console.log('[App] 已注册应用生命周期监听器')
+  }
+  
   // Web 端监听窗口尺寸变化
   if (!platformInfo.isElectron && !platformInfo.isCapacitor) {
     window.addEventListener('resize', () => {
       windowWidth.value = window.innerWidth
     })
+  }
+})
+
+// 应用卸载时清理资源
+onUnmounted(async () => {
+  // 移除 Capacitor 事件监听器
+  if (platformInfo.isCapacitor) {
+    App.removeAllListeners()
+    console.log('[App] 已移除应用生命周期监听器')
+  }
+  
+  // 关闭数据库连接
+  if (platformInfo.isCapacitor) {
+    await handleAppExit()
   }
 })
 </script>

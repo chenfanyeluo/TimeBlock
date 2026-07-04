@@ -184,17 +184,17 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
    */
   async function loadNotesFromDB() {
     console.log('[Store] loadNotesFromDB - platformInfo:', platformInfo)
-    
+
     if (!supportsDatabase()) {
       // 不支持数据库的平台（Web），使用默认便签
       console.log('[Store] 平台不支持数据库，使用默认便签')
       notes.value = [
-        { id: 'work', name: '工作', color: '#409eff' },
-        { id: 'study', name: '学习', color: '#67c23a' },
-        { id: 'rest', name: '休息', color: '#e6a23c' },
-        { id: 'exercise', name: '运动', color: '#f56c6c' },
-        { id: 'life', name: '生活', color: '#9254de' },
-        { id: 'other', name: '其他', color: '#909399' }
+        { id: 1, name: '工作', color: '#409eff' },
+        { id: 2, name: '学习', color: '#67c23a' },
+        { id: 3, name: '休息', color: '#e6a23c' },
+        { id: 4, name: '运动', color: '#f56c6c' },
+        { id: 5, name: '生活', color: '#9254de' },
+        { id: 6, name: '其他', color: '#909399' }
       ]
       return
     }
@@ -203,20 +203,59 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       if (platformInfo.isCapacitor) {
         // Capacitor 平台：直接使用 database 适配层
         console.log('[Store] Capacitor 平台：从数据库加载便签')
+
+        // ⚠️ 优化：立即尝试加载，如果数据库未初始化则等待最多 500ms（而不是 1秒）
+        let retryCount = 0
+        const maxRetry = 5  // 最多重试5次，每次100ms
+
+        while (!database.isReady() && retryCount < maxRetry) {
+          console.log(`[Store] 数据库未初始化，等待... (${retryCount + 1}/${maxRetry})`)
+          await new Promise(resolve => setTimeout(resolve, 100))
+          retryCount++
+        }
+
+        if (!database.isReady()) {
+          console.warn('[Store] 数据库初始化超时，使用默认便签')
+          notes.value = [
+            { id: 1, name: '工作', color: '#409eff' },
+            { id: 2, name: '学习', color: '#67c23a' },
+            { id: 3, name: '休息', color: '#e6a23c' },
+            { id: 4, name: '运动', color: '#f56c6c' },
+            { id: 5, name: '生活', color: '#9254de' },
+            { id: 6, name: '其他', color: '#909399' }
+          ]
+          return
+        }
+
         const result = await database.query('SELECT * FROM notes WHERE user_id = 1 AND deleted_at IS NULL')
+        console.log('[Store] Capacitor 查询结果:', result)
+
+        if (result.length === 0) {
+          console.warn('[Store] 数据库中没有便签数据，使用默认便签')
+          notes.value = [
+            { id: 1, name: '工作', color: '#409eff' },
+            { id: 2, name: '学习', color: '#67c23a' },
+            { id: 3, name: '休息', color: '#e6a23c' },
+            { id: 4, name: '运动', color: '#f56c6c' },
+            { id: 5, name: '生活', color: '#9254de' },
+            { id: 6, name: '其他', color: '#909399' }
+          ]
+          return
+        }
+
         notes.value = result.map(note => ({
-          id: note.id,
+          id: note.id,  // ⚠️ 确保使用数字 ID
           name: note.name,
           color: note.color
         }))
-        console.log('[Store] Capacitor 加载便签:', notes.value.length, notes.value)
+        console.log('[Store] ✅ Capacitor 加载便签成功:', notes.value.length, notes.value)
       } else if (isElectron()) {
         // Electron 平台：使用 IPC
         console.log('[Store] Electron 平台：从数据库加载便签')
         const result = await window.electronAPI.getAllNotes()
         if (result.success && result.data) {
           notes.value = result.data.map(note => ({
-            id: note.id,
+            id: note.id,  // ⚠️ 确保使用数字 ID
             name: note.name,
             color: note.color
           }))
@@ -225,14 +264,14 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       }
     } catch (err) {
       console.error('[Store] 加载便签失败:', err)
-      // 失败时使用默认便签
+      // 失败时使用默认便签（使用数字 ID）
       notes.value = [
-        { id: 'work', name: '工作', color: '#409eff' },
-        { id: 'study', name: '学习', color: '#67c23a' },
-        { id: 'rest', name: '休息', color: '#e6a23c' },
-        { id: 'exercise', name: '运动', color: '#f56c6c' },
-        { id: 'life', name: '生活', color: '#9254de' },
-        { id: 'other', name: '其他', color: '#909399' }
+        { id: 1, name: '工作', color: '#409eff' },
+        { id: 2, name: '学习', color: '#67c23a' },
+        { id: 3, name: '休息', color: '#e6a23c' },
+        { id: 4, name: '运动', color: '#f56c6c' },
+        { id: 5, name: '生活', color: '#9254de' },
+        { id: 6, name: '其他', color: '#909399' }
       ]
     }
   }

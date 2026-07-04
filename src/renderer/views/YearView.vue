@@ -503,8 +503,8 @@ function getHeatColor(level) {
     return `rgba(${r}, ${g}, ${b}, ${alphaMap[level]})`
   }
 
-  // 全部便签模式：GitHub 绿色系
-  const greenMap = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39']
+  // 全部便签模式：绿色系，时间越多颜色越亮
+  const greenMap = ['#ebedf0', '#30a14e', '#40c463', '#52c776', '#7ee8a0']
   return greenMap[level] || greenMap[0]
 }
 
@@ -860,6 +860,109 @@ onMounted(() => {
     outline: 1.5px solid var(--primary-color);
     outline-offset: -1px;
     z-index: 4;
+  }
+}
+
+// ---- 移动端适配 ----
+@media screen and (max-width: 768px) {
+  // 概览卡片：2列布局
+  .stats-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stat-card {
+    .stat-value {
+      font-size: 20px;
+    }
+    .stat-label {
+      font-size: 12px;
+    }
+  }
+
+  // 便签分布：纵向布局（饼图在上，排行榜在下）
+  .distribution-card {
+    .distribution-body {
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .pie-chart-area {
+      flex: 0 0 auto;
+      height: 200px;
+      width: 100%;
+    }
+
+    .ranking-list {
+      flex: 0 0 auto;
+      max-height: none;
+      gap: 8px;
+    }
+
+    .ranking-item {
+      gap: 10px;
+
+      .rank-num {
+        width: 24px;
+        font-size: 14px;
+      }
+
+      .rank-name {
+        min-width: 80px;
+        font-size: 14px;
+      }
+
+      .rank-hours {
+        min-width: 50px;
+        font-size: 14px;
+      }
+    }
+  }
+
+  // 月度趋势图表高度调整
+  .bar-chart-card .chart {
+    height: 200px;
+  }
+
+  .chart-card .chart {
+    height: 220px;
+  }
+
+  // 热力图：每行显示更少的月份块
+  .yhm-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px 8px;
+  }
+
+  .yhm-month-name {
+    font-size: 11px;
+  }
+
+  .yhm-weekdays .yhm-wd {
+    font-size: 8px;
+  }
+
+  // 热力图头部：便签选择和图例响应式
+  .heatmap-card {
+    .calendar-header {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .header-right {
+      flex-wrap: wrap;
+      gap: 8px;
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    .heat-legend {
+      font-size: 10px;
+      .legend-box {
+        width: 11px;
+        height: 11px;
+      }
+    }
   }
 }
 </style>

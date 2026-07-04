@@ -22,6 +22,15 @@ const DEFAULT_USER_ID = 1
 // 数据库名称（Capacitor SQLite 必需参数）
 const DATABASE_NAME = 'timeblock_local'
 
+// checkpoint 节流控制（避免频繁调用）
+let checkpointPending = false
+let checkpointTimer = null
+
+// checkpoint 批量执行策略（优化性能）
+let batchCheckpointEnabled = true
+let lastCheckpointTime = 0
+const CHECKPOINT_INTERVAL = 5000  // 5秒执行一次批量 checkpoint
+
 // SQLite Schema SQL（前端版，单条语句格式）
 // ⚠️ Capacitor SQLite execute() 只接受单条纯 SQL，不能有注释或多语句
 const SCHEMA_SQL = [
@@ -221,6 +230,12 @@ export const database = {
           changes: result.changes?.changes
         })
 
+        // ⚠️ 性能优化：使用批量 checkpoint 策略（每 5 秒执行一次）
+        // 不阻塞后续操作，提升性能
+        this.checkpoint(false).catch(err => {
+          console.error('[Database] Checkpoint 失败:', err)
+        })
+
         return {
           lastInsertRowid: result.changes?.lastInsertRowId || null,
           changes: result.changes?.changes || 0
@@ -278,13 +293,62 @@ export const database = {
   },
 
   /**
+   * 执行 WAL checkpoint（将 WAL 文件内容写入主数据库文件）
+   * 使用批量执行策略，优化性能
+   * @param {boolean} immediate 是否立即执行（默认 false，使用批量策略）
+   * @returns {Promise<void>}
+   */
+  async checkpoint(immediate = false) {
+    try {
+      if (isCapacitor && isInitialized) {
+        const now = Date.now()
+
+        // ⚠️ 性能优化：使用批量 checkpoint 策略
+        // 除非指定 immediate=true，否则每 5 秒执行一次
+        if (!immediate && batchCheckpointEnabled) {
+          if (now - lastCheckpointTime < CHECKPOINT_INTERVAL) {
+            console.log('[Database] Checkpoint 被延迟（批量策略）')
+            return
+          }
+        }
+
+        // 如果已有待执行的 checkpoint，不再重复添加
+        if (checkpointPending) {
+          console.log('[Database] Checkpoint 已排队，跳过重复调用')
+          return
+        }
+
+        checkpointPending = true
+
+        // ⚠️ 使用 run() 方法而不是 execute()，因为 execute() 不支持 PRAGMA 语句
+        await CapacitorSQLite.run({
+          statement: 'PRAGMA wal_checkpoint(TRUNCATE);',
+          values: [],  // ⚠️ 必须提供 values，即使为空数组
+          database: DATABASE_NAME
+        })
+
+        checkpointPending = false
+        lastCheckpointTime = now
+        console.log('[Database] ✅ WAL checkpoint 完成 - 数据已持久化')
+      }
+    } catch (error) {
+      checkpointPending = false
+      console.error('[Database] Checkpoint 失败:', error)
+    }
+  },
+
+  /**
    * 关闭数据库连接
    * @returns {Promise<void>}
    */
   async close() {
     try {
-      if (isCapacitor) {
-        await CapacitorSQLite.close({ database: 'timeblock_local' })
+      if (isCapacitor && isInitialized) {
+        // 关闭前先执行 checkpoint，确保数据持久化
+        await this.checkpoint()
+
+        // 关闭数据库连接
+        await CapacitorSQLite.close({ database: DATABASE_NAME })
         console.log('[Database] Capacitor SQLite 已关闭')
       }
       isInitialized = false
