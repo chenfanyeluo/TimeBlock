@@ -80,7 +80,7 @@ const props = defineProps({
   selected: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update', 'delete', 'select', 'recycle', 'drag-over-pool', 'mobile-block-drag-start', 'mobile-block-drag-move', 'mobile-block-drag-end'])
+const emit = defineEmits(['update', 'delete', 'select', 'recycle', 'drag-over-pool', 'mobile-block-drag-start', 'mobile-block-drag-move', 'mobile-block-drag-end', 'mobile-context-menu'])
 
 const store = useTimeBlockStore()
 const blockRef = ref(null)
@@ -227,8 +227,21 @@ let _dragStartClientY = 0
 const isOverPool = ref(false)  // 拖动时是否在储备栏区域上方
 
 // 点击选中（与拖拽分离：拖拽是 mousedown+move，点击是 click）
-function handleClick() {
-  emit('select', props.block.id)
+// 移动端：touchend 已处理单击弹出上下文菜单，这里不处理（避免重复）
+function handleClick(e) {
+  // 如果需要阻止这次 click（长按或单击已处理），直接返回
+  if (_suppressNextClick) {
+    _suppressNextClick = false
+    return
+  }
+
+  if (isMobileDevice.value) {
+    // 移动端：touchend 已处理，这里不做任何操作
+    return
+  } else {
+    // PC端：选中时间块
+    emit('select', props.block.id)
+  }
 }
 
 // 双击打开备注编辑
@@ -368,6 +381,8 @@ function onResizeEnd() {
 }
 
 // ---- 移动端触摸拖拽（拖到便签栏回收）----
+let _mobileTouchMoved = false // 记录触摸过程中是否发生了移动
+let _suppressNextClick = false // 是否需要阻止后续的 click 事件
 
 /**
  * 移动端：触摸开始，启动长按计时器
@@ -377,19 +392,28 @@ function onBlockTouchStart(e) {
   // 忽略 resize 手柄上的触摸
   if (e.target.classList.contains('resize-handle')) return
 
+  // 阻止默认行为（防止浏览器长按弹出菜单）
+  e.preventDefault()
+
+  _mobileTouchMoved = false
+  _suppressNextClick = false
   const touch = e.touches[0]
 
-  // 启动长按计时器
+  // 启动长按计时器（长按触发拖拽）
   _mobileBlockDragTimer = setTimeout(() => {
-    _isMobileBlockDragging = true
-    // 通知父组件开始拖拽
-    emit('mobile-block-drag-start', {
-      block: props.block,
-      startX: touch.clientX,
-      startY: touch.clientY,
-      categoryColor: categoryColor.value,
-      categoryName: categoryName.value
-    })
+    // 只有未发生移动时才触发拖拽
+    if (!_mobileTouchMoved) {
+      _isMobileBlockDragging = true
+      _suppressNextClick = true // 长按触发拖拽时，阻止后续 click 事件
+      // 通知父组件开始拖拽
+      emit('mobile-block-drag-start', {
+        block: props.block,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        categoryColor: categoryColor.value,
+        categoryName: categoryName.value
+      })
+    }
   }, MOBILE_BLOCK_DRAG_DELAY)
 }
 
@@ -397,7 +421,18 @@ function onBlockTouchStart(e) {
  * 移动端：触摸移动，如果在拖拽状态则通知父组件更新位置
  */
 function onBlockTouchMove(e) {
-  if (!_isMobileBlockDragging || e.touches.length !== 1) return
+  if (e.touches.length !== 1) return
+
+  // 标记发生了移动（取消单击/长按逻辑）
+  _mobileTouchMoved = true
+
+  // 清除长按计时器（移动时取消长按触发）
+  if (_mobileBlockDragTimer) {
+    clearTimeout(_mobileBlockDragTimer)
+    _mobileBlockDragTimer = null
+  }
+
+  if (!_isMobileBlockDragging) return
 
   e.preventDefault() // 拖拽时阻止页面滚动
   const touch = e.touches[0]
@@ -408,7 +443,10 @@ function onBlockTouchMove(e) {
 }
 
 /**
- * 移动端：触摸结束，结束拖拽并通知父组件
+ * 移动端：触摸结束
+ * - 长按触发拖拽：结束拖拽
+ * - 短触摸（单击）：触发上下文菜单
+ * - 移动触摸：不做处理（滑动取消）
  */
 function onBlockTouchEnd(e) {
   // 清理长按计时器
@@ -417,8 +455,13 @@ function onBlockTouchEnd(e) {
     _mobileBlockDragTimer = null
   }
 
+  // 阻止默认行为（防止浏览器触发额外的菜单或事件）
+  e.preventDefault()
+
   if (_isMobileBlockDragging) {
+    // 长按拖拽结束
     _isMobileBlockDragging = false
+    _mobileTouchMoved = false
     const touch = e.changedTouches[0]
     emit('mobile-block-drag-end', {
       block: props.block,
@@ -427,6 +470,19 @@ function onBlockTouchEnd(e) {
       categoryColor: categoryColor.value,
       categoryName: categoryName.value
     })
+  } else if (!_mobileTouchMoved) {
+    // 短触摸（单击）：触发上下文菜单，并阻止后续 click 事件
+    _suppressNextClick = true
+    _mobileTouchMoved = false
+    const touch = e.changedTouches[0]
+    emit('mobile-context-menu', {
+      block: props.block,
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    })
+  } else {
+    // 移动触摸（滑动）：重置状态
+    _mobileTouchMoved = false
   }
 }
 </script>

@@ -190,11 +190,12 @@ const avgDailyHours = computed(() => {
 const topCategory = computed(() => {
   const counts = {}
   monthBlocks.value.forEach(block => {
-    const key = block.noteId || 'other'
-    counts[key] = (counts[key] || 0) + 1
+    // 直接使用时间块的 noteName，而不是通过 noteId 查找
+    const name = block.noteName || '其他'
+    counts[name] = (counts[name] || 0) + 1
   })
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
-  return top ? store.getNoteName(top[0]) : '-'
+  return top ? top[0] : '-'
 })
 
 /** 读取 CSS 变量的实际计算值（ECharts 不解析 var() 字符串） */
@@ -204,27 +205,39 @@ function getCssVar(name) {
 
 const pieOption = computed(() => {
   const data = {}
+  const colorMap = {} // 记录每个便签名称对应的颜色
+
   monthBlocks.value.forEach(block => {
     const start = timeToMinutes(block.startTime)
     const end = timeToMinutes(block.endTime)
     const hours = (end - start) / 60
-    const key = block.noteId || 'other'
-    data[key] = (data[key] || 0) + hours
+    // 直接使用时间块的 noteName 和 noteColor
+    const name = block.noteName || '其他'
+    const color = block.noteColor || '#909399'
+
+    data[name] = (data[name] || 0) + hours
+    // 如果这个便签名称还没有记录颜色，就记录下来（使用第一个时间块的颜色）
+    if (!colorMap[name]) {
+      colorMap[name] = color
+    }
   })
 
   return {
     tooltip: { trigger: 'item' },
-    legend: { bottom: '0%' },
+    legend: {
+      bottom: '0%',
+      textStyle: { color: getCssVar('--chart-label-color') }
+    },
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
       avoidLabelOverlap: false,
       itemStyle: { borderRadius: 8, borderColor: getCssVar('--chart-border'), borderWidth: 2 },
       label: { show: false },
-      data: Object.entries(data).map(([key, value]) => ({
-        name: store.getNoteName(key),
+      data: Object.entries(data).map(([name, value]) => ({
+        name: name,
         value: value.toFixed(1),
-        itemStyle: { color: store.getNoteColor(key) }
+        itemStyle: { color: colorMap[name] || '#909399' }
       }))
     }]
   }

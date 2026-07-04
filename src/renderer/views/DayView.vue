@@ -152,7 +152,7 @@
             <div class="hint-steps">
               <div class="hint-step">
                 <span class="step-num">1</span>
-                <span class="step-text">在<strong>右侧时间网格</strong>区域按住屏幕</span>
+                <span class="step-text">在<strong>左侧时间网格</strong>区域按住屏幕</span>
               </div>
               <div class="hint-step">
                 <span class="step-num">2</span>
@@ -160,7 +160,7 @@
               </div>
               <div class="hint-step">
                 <span class="step-num">3</span>
-                <span class="step-text">松开后点击<strong>左侧便签</strong>完成创建</span>
+                <span class="step-text">松开后点击<strong>右侧便签</strong>完成创建</span>
               </div>
             </div>
             <p class="hint-tip">提示：先点击便签激活，再绘制可直接创建</p>
@@ -263,6 +263,7 @@
             @mobile-block-drag-start="onMobileBlockDragStart"
             @mobile-block-drag-move="onMobileBlockDragMove"
             @mobile-block-drag-end="onMobileBlockDragEnd"
+            @mobile-context-menu="onMobileContextMenu"
           />
 
           <!-- 右键上下文菜单 -->
@@ -565,10 +566,41 @@ const showColorPicker = ref(false)
 function onBlockContextMenu(e, block) {
   e.preventDefault()
   e.stopPropagation()
+
+  // 移动端：不处理 contextmenu 事件（由 touch 事件处理）
+  if (isMobileDevice.value) {
+    return
+  }
+
   selectedBlockId.value = block.id
   const gridRect = dayGridRef.value.getBoundingClientRect()
   let x = e.clientX - gridRect.left
   let y = e.clientY - gridRect.top
+  // 边界保护：防止超出四边框
+  x = Math.max(4, Math.min(x, gridRect.width - 160))
+  y = Math.max(4, Math.min(y, gridRect.height - 220))
+  contextMenu.value = { visible: true, x, y, block }
+  showColorPicker.value = false
+}
+
+/**
+ * 移动端：单击时间块切换上下文菜单（显示/隐藏）
+ */
+function onMobileContextMenu(data) {
+  const { block, clientX, clientY } = data
+
+  // 如果菜单已显示且是同一个时间块，则关闭菜单
+  if (contextMenu.value.visible && contextMenu.value.block?.id === block.id) {
+    hideContextMenu()
+    selectedBlockId.value = null
+    return
+  }
+
+  // 否则显示菜单
+  selectedBlockId.value = block.id
+  const gridRect = dayGridRef.value.getBoundingClientRect()
+  let x = clientX - gridRect.left
+  let y = clientY - gridRect.top
   // 边界保护：防止超出四边框
   x = Math.max(4, Math.min(x, gridRect.width - 160))
   y = Math.max(4, Math.min(y, gridRect.height - 220))
@@ -1248,6 +1280,9 @@ function onMobileBlockDragEnd(data) {
   if (!mobileBlockDragState.value.active) return
 
   const { block, clientX, clientY, categoryColor, categoryName } = data
+
+  // 关闭上下文菜单（修复拖拽结束后菜单依旧存在的问题）
+  hideContextMenu()
 
   // 检测是否在便签栏区域上方
   const poolEl = taskPoolRef.value?.$el || document.querySelector('.task-pool')

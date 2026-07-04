@@ -2,9 +2,17 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import dayjs from 'dayjs'
 import { storage } from '@shared/platform'
+import { platformInfo, database } from '@shared/platform'
 
 /**
- * 检查是否在 Electron 环境中
+ * 检查是否支持数据库（Electron 或 Capacitor）
+ */
+function supportsDatabase() {
+  return platformInfo.isElectron || platformInfo.isCapacitor
+}
+
+/**
+ * 检查是否在 Electron 环境中（旧函数，保留兼容）
  */
 function isElectron() {
   return typeof window !== 'undefined' && window.electronAPI
@@ -175,39 +183,95 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
    * 从数据库加载便签
    */
   async function loadNotesFromDB() {
-    if (!isElectron()) {
-      // 非 Electron 环境，使用默认便签
+    console.log('[Store] loadNotesFromDB - platformInfo:', platformInfo)
+
+    if (!supportsDatabase()) {
+      // 不支持数据库的平台（Web），使用默认便签
+      console.log('[Store] 平台不支持数据库，使用默认便签')
       notes.value = [
-        { id: 'work', name: '工作', color: '#409eff' },
-        { id: 'study', name: '学习', color: '#67c23a' },
-        { id: 'rest', name: '休息', color: '#e6a23c' },
-        { id: 'exercise', name: '运动', color: '#f56c6c' },
-        { id: 'life', name: '生活', color: '#9254de' },
-        { id: 'other', name: '其他', color: '#909399' }
+        { id: 1, name: '工作', color: '#409eff' },
+        { id: 2, name: '学习', color: '#67c23a' },
+        { id: 3, name: '休息', color: '#e6a23c' },
+        { id: 4, name: '运动', color: '#f56c6c' },
+        { id: 5, name: '生活', color: '#9254de' },
+        { id: 6, name: '其他', color: '#909399' }
       ]
       return
     }
 
     try {
-      const result = await window.electronAPI.getAllNotes()
-      if (result.success && result.data) {
-        notes.value = result.data.map(note => ({
-          id: note.id,
+      if (platformInfo.isCapacitor) {
+        // Capacitor 平台：直接使用 database 适配层
+        console.log('[Store] Capacitor 平台：从数据库加载便签')
+
+        // ⚠️ 优化：立即尝试加载，如果数据库未初始化则等待最多 500ms（而不是 1秒）
+        let retryCount = 0
+        const maxRetry = 5  // 最多重试5次，每次100ms
+
+        while (!database.isReady() && retryCount < maxRetry) {
+          console.log(`[Store] 数据库未初始化，等待... (${retryCount + 1}/${maxRetry})`)
+          await new Promise(resolve => setTimeout(resolve, 100))
+          retryCount++
+        }
+
+        if (!database.isReady()) {
+          console.warn('[Store] 数据库初始化超时，使用默认便签')
+          notes.value = [
+            { id: 1, name: '工作', color: '#409eff' },
+            { id: 2, name: '学习', color: '#67c23a' },
+            { id: 3, name: '休息', color: '#e6a23c' },
+            { id: 4, name: '运动', color: '#f56c6c' },
+            { id: 5, name: '生活', color: '#9254de' },
+            { id: 6, name: '其他', color: '#909399' }
+          ]
+          return
+        }
+
+        const result = await database.query('SELECT * FROM notes WHERE user_id = 1 AND deleted_at IS NULL')
+        console.log('[Store] Capacitor 查询结果:', result)
+
+        if (result.length === 0) {
+          console.warn('[Store] 数据库中没有便签数据，使用默认便签')
+          notes.value = [
+            { id: 1, name: '工作', color: '#409eff' },
+            { id: 2, name: '学习', color: '#67c23a' },
+            { id: 3, name: '休息', color: '#e6a23c' },
+            { id: 4, name: '运动', color: '#f56c6c' },
+            { id: 5, name: '生活', color: '#9254de' },
+            { id: 6, name: '其他', color: '#909399' }
+          ]
+          return
+        }
+
+        notes.value = result.map(note => ({
+          id: note.id,  // ⚠️ 确保使用数字 ID
           name: note.name,
           color: note.color
         }))
-        console.log('[Store] 加载便签:', notes.value.length)
+        console.log('[Store] ✅ Capacitor 加载便签成功:', notes.value.length, notes.value)
+      } else if (isElectron()) {
+        // Electron 平台：使用 IPC
+        console.log('[Store] Electron 平台：从数据库加载便签')
+        const result = await window.electronAPI.getAllNotes()
+        if (result.success && result.data) {
+          notes.value = result.data.map(note => ({
+            id: note.id,  // ⚠️ 确保使用数字 ID
+            name: note.name,
+            color: note.color
+          }))
+          console.log('[Store] Electron 加载便签:', notes.value.length)
+        }
       }
     } catch (err) {
       console.error('[Store] 加载便签失败:', err)
-      // 失败时使用默认便签
+      // 失败时使用默认便签（使用数字 ID）
       notes.value = [
-        { id: 'work', name: '工作', color: '#409eff' },
-        { id: 'study', name: '学习', color: '#67c23a' },
-        { id: 'rest', name: '休息', color: '#e6a23c' },
-        { id: 'exercise', name: '运动', color: '#f56c6c' },
-        { id: 'life', name: '生活', color: '#9254de' },
-        { id: 'other', name: '其他', color: '#909399' }
+        { id: 1, name: '工作', color: '#409eff' },
+        { id: 2, name: '学习', color: '#67c23a' },
+        { id: 3, name: '休息', color: '#e6a23c' },
+        { id: 4, name: '运动', color: '#f56c6c' },
+        { id: 5, name: '生活', color: '#9254de' },
+        { id: 6, name: '其他', color: '#909399' }
       ]
     }
   }
@@ -216,12 +280,33 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
    * 从数据库加载指定日期的时间块
    */
   async function loadBlocksByDateFromDB(date) {
-    if (!isElectron()) return
+    console.log('[Store] loadBlocksByDateFromDB - date:', date, 'platformInfo:', platformInfo)
+    
+    if (!supportsDatabase()) {
+      console.log('[Store] 平台不支持数据库，跳过加载时间块')
+      return
+    }
 
     try {
-      const result = await window.electronAPI.getTimeBlocksByDate(date)
-      if (result.success && result.data) {
-        const newBlocks = result.data.map(dbBlockToFrontend)
+      if (platformInfo.isCapacitor) {
+        // Capacitor 平台：直接使用 database 适配层
+        console.log('[Store] Capacitor 平台：从数据库加载时间块', date)
+        
+        const querySQL = `
+          SELECT tb.*, n.name as note_name, n.color as note_color 
+          FROM time_blocks tb 
+          LEFT JOIN notes n ON tb.note_id = n.id 
+          WHERE tb.user_id = 1 
+            AND DATE(tb.start_time) = DATE(?)
+            AND tb.deleted_at IS NULL
+          ORDER BY tb.start_time ASC
+        `
+        
+        const result = await database.query(querySQL, [date])
+        console.log('[Store] Capacitor 查询结果:', result.length)
+        
+        const newBlocks = result.map(dbBlockToFrontend)
+        
         // 合并到现有 blocks（避免重复）
         const existingIds = new Set(blocks.value.map(b => b.id))
         for (const block of newBlocks) {
@@ -229,7 +314,22 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
             blocks.value.push(block)
           }
         }
-        console.log('[Store] 加载时间块:', date, newBlocks.length)
+        console.log('[Store] Capacitor 加载时间块成功:', date, newBlocks.length, newBlocks)
+      } else if (isElectron()) {
+        // Electron 平台：使用 IPC
+        console.log('[Store] Electron 平台：从数据库加载时间块', date)
+        const result = await window.electronAPI.getTimeBlocksByDate(date)
+        if (result.success && result.data) {
+          const newBlocks = result.data.map(dbBlockToFrontend)
+          // 合并到现有 blocks（避免重复）
+          const existingIds = new Set(blocks.value.map(b => b.id))
+          for (const block of newBlocks) {
+            if (!existingIds.has(block.id)) {
+              blocks.value.push(block)
+            }
+          }
+          console.log('[Store] Electron 加载时间块:', date, newBlocks.length)
+        }
       }
     } catch (err) {
       console.error('[Store] 加载时间块失败:', err)
@@ -327,24 +427,70 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
    * 添加时间块
    */
   async function addBlock(block) {
+    console.log('[Store] addBlock - platformInfo:', platformInfo, 'block:', block)
     pushHistory('添加时间块')
 
-    if (isElectron()) {
+    if (supportsDatabase()) {
       try {
         const dbData = frontendBlockToDb(block)
-        const result = await window.electronAPI.createTimeBlock(dbData)
-        if (result.success && result.data) {
-          const newBlock = dbBlockToFrontend(result.data)
-          blocks.value.push(newBlock)
-          console.log('[Store] 创建时间块:', newBlock.id)
-          return newBlock
+        console.log('[Store] 转换后的数据库数据:', dbData)
+        
+        if (platformInfo.isCapacitor) {
+          // Capacitor 平台：直接使用 database 适配层
+          console.log('[Store] Capacitor 平台：写入数据库')
+          
+          const insertSQL = `
+            INSERT INTO time_blocks (user_id, note_id, title, description, start_time, end_time, is_completed)
+            VALUES (1, ?, ?, ?, ?, ?, ?)
+          `
+          
+          const result = await database.run(insertSQL, [
+            dbData.note_id,
+            dbData.title,
+            dbData.description,
+            dbData.start_time,
+            dbData.end_time,
+            dbData.is_completed
+          ])
+          
+          console.log('[Store] Capacitor 写入结果:', result)
+          
+          if (result.lastInsertRowid) {
+            // 查询刚插入的记录（包含便签信息）
+            const querySQL = `
+              SELECT tb.*, n.name as note_name, n.color as note_color 
+              FROM time_blocks tb 
+              LEFT JOIN notes n ON tb.note_id = n.id 
+              WHERE tb.id = ?
+            `
+            const newRecord = await database.query(querySQL, [result.lastInsertRowid])
+            console.log('[Store] Capacitor 查询新记录:', newRecord)
+            
+            if (newRecord.length > 0) {
+              const newBlock = dbBlockToFrontend(newRecord[0])
+              blocks.value.push(newBlock)
+              console.log('[Store] ✅ Capacitor 创建时间块成功:', newBlock.id, newBlock)
+              return newBlock
+            }
+          }
+        } else if (isElectron()) {
+          // Electron 平台：使用 IPC
+          console.log('[Store] Electron 平台：写入数据库')
+          const result = await window.electronAPI.createTimeBlock(dbData)
+          if (result.success && result.data) {
+            const newBlock = dbBlockToFrontend(result.data)
+            blocks.value.push(newBlock)
+            console.log('[Store] Electron 创建时间块:', newBlock.id)
+            return newBlock
+          }
         }
       } catch (err) {
         console.error('[Store] 创建时间块失败:', err)
       }
     }
 
-    // 非 Electron 环境或失败时，使用本地 ID
+    // 不支持数据库或失败时，使用本地 ID（仅内存，不持久化）
+    console.log('[Store] ⚠️ 使用本地模式（不持久化）')
     const localBlock = {
       id: Date.now(),
       ...block

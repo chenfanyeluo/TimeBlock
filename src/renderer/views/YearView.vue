@@ -57,7 +57,7 @@
     <!-- 月度趋势（在便签分布下方，标题随模式变化） -->
     <el-card class="chart-card bar-chart-card">
       <template #header>
-        <span>{{ selectedNoteId ? `${store.getNoteName(selectedNoteId)} · 月度趋势` : '月度趋势' }}</span>
+        <span>{{ selectedNoteId ? `${notes.find(n => n.id === selectedNoteId)?.name || '其他'} · 月度趋势` : '月度趋势' }}</span>
       </template>
       <div ref="barChartRef" class="chart"></div>
     </el-card>
@@ -195,29 +195,35 @@ const recordDays = computed(() => {
 })
 
 const topNoteName = computed(() => {
-  if (selectedNoteId.value) return store.getNoteName(selectedNoteId.value)
+  if (selectedNoteId.value) {
+    // 如果选中了特定便签，从时间块中获取该便签的名称
+    const block = filteredBlocks.value.find(b => b.noteId === selectedNoteId.value)
+    return block?.noteName || '其他'
+  }
   const counts = {}
   filteredBlocks.value.forEach(b => {
-    const key = b.noteId || 'other'
-    counts[key] = (counts[key] || 0) + 1
+    // 直接使用时间块的 noteName
+    const name = b.noteName || '其他'
+    counts[name] = (counts[name] || 0) + 1
   })
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
-  return top ? store.getNoteName(top[0]) : '-'
+  return top ? top[0] : '-'
 })
 
 // ---- ECharts 配置 ----
 
 /** 月度趋势柱状图（单便签模式：单色柱；全部便签模式：分层堆叠柱） */
 const barOption = computed(() => {
-  // 单便签模式：保持原有单色柱状�?
+  // 单便签模式：保持原有单色柱状图
   if (selectedNoteId.value) {
     const monthlyData = Array(12).fill(0)
     filteredBlocks.value.forEach(b => {
       const m = dayjs(b.date).month()
       monthlyData[m] += (timeToMinutes(b.endTime) - timeToMinutes(b.startTime)) / 60
     })
-    const note = notes.value.find(n => n.id === selectedNoteId.value)
-    const barColor = note?.color || '#409eff'
+    // 从时间块获取颜色，而不是从 notes.value 查找
+    const block = filteredBlocks.value.find(b => b.noteId === selectedNoteId.value)
+    const barColor = block?.noteColor || '#409eff'
 
     return {
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
@@ -244,24 +250,28 @@ const barOption = computed(() => {
   }
 
   // ===== 全部便签模式：分层堆叠柱状图 =====
-  // 按便签聚合每月时长
-  const noteMonthlyMap = {} // key -> [12个月的时长]
+  // 按便签聚合每月时长（使用时间块的 noteName 和 noteColor）
+  const noteMonthlyMap = {} // name -> { monthly: [12个月的时长], color: string }
   yearBlocks.value.forEach(b => {
     const m = dayjs(b.date).month()
     const hrs = (timeToMinutes(b.endTime) - timeToMinutes(b.startTime)) / 60
-    const key = b.noteId || 'other'
-    if (!noteMonthlyMap[key]) noteMonthlyMap[key] = Array(12).fill(0)
-    noteMonthlyMap[key][m] += hrs
+    // 直接使用时间块的 noteName 和 noteColor
+    const name = b.noteName || '其他'
+    const color = b.noteColor || '#909399'
+
+    if (!noteMonthlyMap[name]) {
+      noteMonthlyMap[name] = { monthly: Array(12).fill(0), color }
+    }
+    noteMonthlyMap[name].monthly[m] += hrs
   })
-  
+
   // 按年度总时长降序排序
   const sortedNotes = Object.entries(noteMonthlyMap)
-    .map(([key, monthly]) => ({
-      key,
-      name: store.getNoteName(key),
-      color: store.getNoteColor(key),
-      total: monthly.reduce((s, v) => s + v, 0),
-      monthly: monthly.map(v => parseFloat(v.toFixed(1)))
+    .map(([name, data]) => ({
+      name,
+      color: data.color,
+      total: data.monthly.reduce((s, v) => s + v, 0),
+      monthly: data.monthly.map(v => parseFloat(v.toFixed(1)))
     }))
     .sort((a, b) => b.total - a.total)
   
@@ -322,10 +332,19 @@ const barOption = computed(() => {
 /** 便签分布饼图（始终显示全部便签，不受筛选影响） */
 const pieOption = computed(() => {
   const data = {}
+  const colorMap = {} // 记录每个便签名称对应的颜色
+
   yearBlocks.value.forEach(b => {
     const hrs = (timeToMinutes(b.endTime) - timeToMinutes(b.startTime)) / 60
-    const key = b.noteId || 'other'
-    data[key] = (data[key] || 0) + hrs
+    // 直接使用时间块的 noteName 和 noteColor
+    const name = b.noteName || '其他'
+    const color = b.noteColor || '#909399'
+
+    data[name] = (data[name] || 0) + hrs
+    // 如果这个便签名称还没有记录颜色，就记录下来
+    if (!colorMap[name]) {
+      colorMap[name] = color
+    }
   })
 
   // 按值降序排列，取前8个，其余合并为"其他"
@@ -333,10 +352,10 @@ const pieOption = computed(() => {
   const topItems = sorted.slice(0, 8)
   const restSum = sorted.slice(8).reduce((s, [, v]) => s + v, 0)
 
-  const pieData = topItems.map(([key, value]) => ({
-    name: store.getNoteName(key),
+  const pieData = topItems.map(([name, value]) => ({
+    name: name,
     value: parseFloat(value.toFixed(1)),
-    itemStyle: { color: store.getNoteColor(key) }
+    itemStyle: { color: colorMap[name] || '#909399' }
   }))
   if (restSum > 0) {
     pieData.push({ name: '其他', value: parseFloat(restSum.toFixed(1)), itemStyle: { color: '#909399' } })
@@ -354,13 +373,15 @@ const pieOption = computed(() => {
       label: {
         show: true,
         fontSize: 10,
+        color: getCssVar('--chart-label-color'),
         formatter: '{b}\n{d}%',
         overflow: 'truncate',
         width: 60
       },
       labelLine: {
         length: 10,
-        length2: 8
+        length2: 8,
+        lineStyle: { color: getCssVar('--chart-label-color') }
       },
       data: pieData
     }]
@@ -370,21 +391,30 @@ const pieOption = computed(() => {
 /** 便签时间排行榜（始终显示全部便签，不受筛选影响） */
 const noteRanking = computed(() => {
   const data = {}
+  const colorMap = {} // 记录每个便签名称对应的颜色
+
   yearBlocks.value.forEach(b => {
     const hrs = (timeToMinutes(b.endTime) - timeToMinutes(b.startTime)) / 60
-    const key = b.noteId || 'other'
-    data[key] = (data[key] || 0) + hrs
+    // 直接使用时间块的 noteName 和 noteColor
+    const name = b.noteName || '其他'
+    const color = b.noteColor || '#909399'
+
+    data[name] = (data[name] || 0) + hrs
+    // 如果这个便签名称还没有记录颜色，就记录下来
+    if (!colorMap[name]) {
+      colorMap[name] = color
+    }
   })
 
   // 按时长降序，取前10
   const sorted = Object.entries(data).sort((a, b) => b[1] - a[1])
   const maxVal = sorted[0]?.[1] || 1
 
-  return sorted.slice(0, 10).map(([key, value]) => ({
-    id: key,
-    name: store.getNoteName(key),
+  return sorted.slice(0, 10).map(([name, value]) => ({
+    id: name,
+    name: name,
     hours: parseFloat(value.toFixed(1)),
-    color: store.getNoteColor(key),
+    color: colorMap[name] || '#909399',
     percent: Math.round((value / maxVal) * 100)
   }))
 })
@@ -473,8 +503,8 @@ function getHeatColor(level) {
     return `rgba(${r}, ${g}, ${b}, ${alphaMap[level]})`
   }
 
-  // 全部便签模式：GitHub 绿色系
-  const greenMap = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39']
+  // 全部便签模式：绿色系，时间越多颜色越亮
+  const greenMap = ['#ebedf0', '#30a14e', '#40c463', '#52c776', '#7ee8a0']
   return greenMap[level] || greenMap[0]
 }
 
@@ -830,6 +860,109 @@ onMounted(() => {
     outline: 1.5px solid var(--primary-color);
     outline-offset: -1px;
     z-index: 4;
+  }
+}
+
+// ---- 移动端适配 ----
+@media screen and (max-width: 768px) {
+  // 概览卡片：2列布局
+  .stats-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stat-card {
+    .stat-value {
+      font-size: 20px;
+    }
+    .stat-label {
+      font-size: 12px;
+    }
+  }
+
+  // 便签分布：纵向布局（饼图在上，排行榜在下）
+  .distribution-card {
+    .distribution-body {
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .pie-chart-area {
+      flex: 0 0 auto;
+      height: 200px;
+      width: 100%;
+    }
+
+    .ranking-list {
+      flex: 0 0 auto;
+      max-height: none;
+      gap: 8px;
+    }
+
+    .ranking-item {
+      gap: 10px;
+
+      .rank-num {
+        width: 24px;
+        font-size: 14px;
+      }
+
+      .rank-name {
+        min-width: 80px;
+        font-size: 14px;
+      }
+
+      .rank-hours {
+        min-width: 50px;
+        font-size: 14px;
+      }
+    }
+  }
+
+  // 月度趋势图表高度调整
+  .bar-chart-card .chart {
+    height: 200px;
+  }
+
+  .chart-card .chart {
+    height: 220px;
+  }
+
+  // 热力图：每行显示更少的月份块
+  .yhm-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px 8px;
+  }
+
+  .yhm-month-name {
+    font-size: 11px;
+  }
+
+  .yhm-weekdays .yhm-wd {
+    font-size: 8px;
+  }
+
+  // 热力图头部：便签选择和图例响应式
+  .heatmap-card {
+    .calendar-header {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .header-right {
+      flex-wrap: wrap;
+      gap: 8px;
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    .heat-legend {
+      font-size: 10px;
+      .legend-box {
+        width: 11px;
+        height: 11px;
+      }
+    }
   }
 }
 </style>
