@@ -223,21 +223,15 @@ function confirmNote() {
   }
 
   if (editingId.value) {
-    // 编辑模式
-    const idx = store.notes.findIndex(n => n.id === editingId.value)
-    if (idx !== -1) {
-      store.notes[idx] = {
-        ...store.notes[idx],
-        name: newNote.value.name.trim(),
-        color: newNote.value.color
-      }
-      ElMessage.success(`便签"${newNote.value.name}"已更新`)
-    }
+    // 编辑模式 — 通过 store 持久化
+    store.updateNote(editingId.value, {
+      name: newNote.value.name.trim(),
+      color: newNote.value.color
+    })
+    ElMessage.success(`便签"${newNote.value.name}"已更新`)
   } else {
-    // 新增模式
-    const id = `note-${Date.now()}`
-    store.notes.push({
-      id,
+    // 新增模式 — 通过 store 持久化
+    store.createNote({
       name: newNote.value.name.trim(),
       color: newNote.value.color
     })
@@ -250,11 +244,10 @@ function confirmNote() {
 
 // 删除便签
 function removeNote(id) {
-  const idx = store.notes.findIndex(n => n.id === id)
-  if (idx !== -1) {
-    const name = store.notes[idx].name
-    store.notes.splice(idx, 1)
-    ElMessage.success(`已删除便签"${name}"`)
+  const note = store.notes.find(n => n.id === id)
+  if (note) {
+    store.deleteNote(id)
+    ElMessage.success(`已删除便签"${note.name}"`)
   }
 }
 
@@ -313,11 +306,7 @@ function recycleNote(name, color) {
     return
   }
 
-  store.notes.push({
-    id: `recycled-${Date.now()}`,
-    name: name,
-    color: color || '#909399'
-  })
+  store.createNote({ name, color: color || '#909399' })
   ElMessage.success(`"${name}"已回收到便签栏`)
 }
 

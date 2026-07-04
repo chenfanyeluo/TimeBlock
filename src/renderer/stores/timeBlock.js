@@ -49,6 +49,7 @@ function dbBlockToFrontend(dbBlock) {
     noteName: dbBlock.note_name || '未分类',
     noteColor: dbBlock.note_color || '#909399',
     title: dbBlock.title,
+    taskName: dbBlock.title || '',
     description: dbBlock.description,
     startTime: startDayjs.format('HH:mm'),
     endTime: endTime,
@@ -881,6 +882,32 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         }
       } catch (err) {
         console.error('[Store] 更新时间块失败:', err)
+      }
+    } else if (platformInfo.isCapacitor && database.isReady()) {
+      try {
+        const merged = { ...oldBlock, ...updates }
+        const dbData = frontendBlockToDb(merged)
+        const updateSQL = `
+          UPDATE time_blocks
+          SET note_id = ?, title = ?, description = ?, start_time = ?, end_time = ?, is_completed = ?
+          WHERE id = ? AND user_id = 1
+        `
+        await database.run(updateSQL, [
+          dbData.note_id,
+          dbData.title,
+          dbData.description,
+          dbData.start_time,
+          dbData.end_time,
+          dbData.is_completed,
+          id
+        ])
+        console.log('[Store] Capacitor 更新时间块:', id)
+
+        const updatedBlock = dbBlockToFrontend({ id, ...dbData, note_name: merged.noteName, note_color: merged.noteColor })
+        blocks.value[idx] = updatedBlock
+        return updatedBlock
+      } catch (err) {
+        console.error('[Store] Capacitor 更新时间块失败:', err)
       }
     }
 

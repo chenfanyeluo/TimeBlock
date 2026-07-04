@@ -22,7 +22,7 @@
     <template v-if="isCompact">
       <div class="compact-row">
         <span class="compact-time">{{ displayStartTime }} - {{ displayEndTime }}</span>
-        <span class="compact-name">{{ block.taskName }}</span>
+        <span class="compact-name">{{ (block.taskName || block.title) }}</span>
         <span v-if="block.note" class="compact-note-inline">tip:{{ block.note }}</span>
         <span v-if="!block.note" class="category-badge" :style="{ background: categoryColor }">
           {{ categoryName }}
@@ -42,7 +42,7 @@
           <el-icon><Bell /></el-icon>
         </span>
       </div>
-      <div class="block-content">{{ block.taskName }}</div>
+      <div class="block-content">{{ (block.taskName || block.title) }}</div>
 
       <!-- 备注显示 -->
       <div v-if="block.note && !isEditingNote" class="block-note">tip：{{ block.note }}</div>
@@ -389,7 +389,7 @@ function onDragEnd(e) {
 
     emit('recycle', {
       blockId: props.block.id,
-      taskName: props.block.taskName,
+      taskName: props.block.taskName || props.block.title,
       categoryColor: categoryColor.value,
     })
     document.removeEventListener('mousemove', onDragMove)
@@ -620,7 +620,7 @@ function onBlockTouchEnd(e) {
 
       emit('recycle', {
         blockId: props.block.id,
-        taskName: props.block.taskName,
+        taskName: props.block.taskName || props.block.title,
         categoryColor: categoryColor.value,
       })
     } else {
