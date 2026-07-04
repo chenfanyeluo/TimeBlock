@@ -340,6 +340,7 @@ import { useRouter } from 'vue-router'
 import { Delete, Plus, Download, Upload, ArrowRight, Connection, User, Tickets, Setting, Brush, FolderOpened } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { ElMessage } from '@utils/message'
+import dayjs from 'dayjs'
 import { useTimeBlockStore } from '@stores/timeBlock'
 import * as authApi from '@api/auth'
 import * as syncApi from '@api/sync'
@@ -771,15 +772,25 @@ async function syncNow() {
         name: n.name,
         color: n.color
       })),
-      timeBlocks: store.blocks.map(b => ({
-        id: b.id,
-        noteId: b.noteId,
-        title: b.title,
-        description: b.remark || b.description,
-        startTime: `${b.date}T${b.startTime}:00`,
-        endTime: `${b.date}T${b.endTime}:00`,
-        isCompleted: b.isCompleted ? 1 : 0
-      })),
+      timeBlocks: store.blocks.map(b => {
+        // 24:00 结束 → 转为次日 00:00（与 frontendBlockToDb 一致）
+        let endTimeValue
+        if (b.endTime === '24:00') {
+          const nextDate = dayjs(b.date).add(1, 'day').format('YYYY-MM-DD')
+          endTimeValue = `${nextDate}T00:00:00`
+        } else {
+          endTimeValue = `${b.date}T${b.endTime}:00`
+        }
+        return {
+          id: b.id,
+          noteId: b.noteId,
+          title: b.title,
+          description: b.remark || b.description,
+          startTime: `${b.date}T${b.startTime}:00`,
+          endTime: endTimeValue,
+          isCompleted: b.isCompleted ? 1 : 0
+        }
+      }),
       syncType: 'manual'
     }
 
@@ -801,19 +812,28 @@ async function syncNow() {
 
     if (result.data.timeBlocks && result.data.timeBlocks.length > 0) {
       // 简单合并策略：云端数据覆盖本地
-      store.blocks = result.data.timeBlocks.map(tb => ({
-        id: tb.id,
-        noteId: tb.noteId,
-        noteName: tb.note?.name || '未分类',
-        noteColor: tb.note?.color || '#909399',
-        title: tb.title,
-        description: tb.description,
-        startTime: tb.startTime.split('T')[1]?.slice(0, 5) || '00:00',
-        endTime: tb.endTime.split('T')[1]?.slice(0, 5) || '00:00',
-        date: tb.startTime.split('T')[0] || new Date().toISOString().split('T')[0],
-        isCompleted: tb.isCompleted === 1,
-        remark: tb.description || ''
-      }))
+      store.blocks = result.data.timeBlocks.map(tb => {
+        // 还原 24:00：若 end 在次日且 HH:mm 为 00:00，说明原始是 24:00
+        let endTime = tb.endTime.split('T')[1]?.slice(0, 5) || '00:00'
+        const startDate = tb.startTime?.split('T')[0] || ''
+        const endDate = tb.endTime?.split('T')[0] || ''
+        if (endTime === '00:00' && endDate > startDate) {
+          endTime = '24:00'
+        }
+        return {
+          id: tb.id,
+          noteId: tb.noteId,
+          noteName: tb.note?.name || '未分类',
+          noteColor: tb.note?.color || '#909399',
+          title: tb.title,
+          description: tb.description,
+          startTime: tb.startTime.split('T')[1]?.slice(0, 5) || '00:00',
+          endTime: endTime,
+          date: tb.startTime.split('T')[0] || new Date().toISOString().split('T')[0],
+          isCompleted: tb.isCompleted === 1,
+          remark: tb.description || ''
+        }
+      })
     }
 
     pendingCount.value = 0
@@ -919,14 +939,24 @@ function exportData() {
       defaultAdvanceMinutes: n.default_advance_minutes || 5
     })),
     // 导出时间块
-    timeBlocks: store.blocks.map(b => ({
-      noteName: store.getNoteName(b.noteId), // 便签名称（用于匹配）
-      title: b.title,
-      description: b.remark || b.description || '',
-      startTime: `${b.date}T${b.startTime}:00`,
-      endTime: `${b.date}T${b.endTime}:00`,
-      isCompleted: b.isCompleted
-    }))
+    timeBlocks: store.blocks.map(b => {
+      // 24:00 结束 → 转为次日 00:00
+      let endTimeValue
+      if (b.endTime === '24:00') {
+        const nextDate = dayjs(b.date).add(1, 'day').format('YYYY-MM-DD')
+        endTimeValue = `${nextDate}T00:00:00`
+      } else {
+        endTimeValue = `${b.date}T${b.endTime}:00`
+      }
+      return {
+        noteName: store.getNoteName(b.noteId), // 便签名称（用于匹配）
+        title: b.title,
+        description: b.remark || b.description || '',
+        startTime: `${b.date}T${b.startTime}:00`,
+        endTime: endTimeValue,
+        isCompleted: b.isCompleted
+      }
+    })
   }
 
   const data = JSON.stringify(exportPackage, null, 2)

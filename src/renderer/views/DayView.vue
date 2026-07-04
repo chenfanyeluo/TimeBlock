@@ -622,15 +622,25 @@ async function handleSearch() {
       })
 
       if (memoryResults.length > 0) {
-        searchResults.value = memoryResults.map(tb => ({
-          id: tb.id,
-          title: tb.title,
-          description: tb.remark || tb.description || '',
-          startTime: `${tb.date}T${tb.startTime}:00`,
-          endTime: `${tb.date}T${tb.endTime}:00`,
-          note: { name: tb.noteName || '未分类', color: tb.noteColor || '#909399' },
-          source: '当前页面'
-        }))
+        searchResults.value = memoryResults.map(tb => {
+          // 24:00 结束 → 转为次日 00:00（与 frontendBlockToDb 一致）
+          let endTimeValue
+          if (tb.endTime === '24:00') {
+            const nextDate = dayjs(tb.date).add(1, 'day').format('YYYY-MM-DD')
+            endTimeValue = `${nextDate}T00:00:00`
+          } else {
+            endTimeValue = `${tb.date}T${tb.endTime}:00`
+          }
+          return {
+            id: tb.id,
+            title: tb.title,
+            description: tb.remark || tb.description || '',
+            startTime: `${tb.date}T${tb.startTime}:00`,
+            endTime: endTimeValue,
+            note: { name: tb.noteName || '未分类', color: tb.noteColor || '#909399' },
+            source: '当前页面'
+          }
+        })
         searchSource.value = '当前页面'
         console.log('[DayView] 内存搜索结果:', memoryResults.length)
       }

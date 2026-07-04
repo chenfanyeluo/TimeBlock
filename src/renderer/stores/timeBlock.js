@@ -23,6 +23,26 @@ function isElectron() {
  * 时间块数据格式转换（数据库 → 前端）
  */
 function dbBlockToFrontend(dbBlock) {
+  const startDayjs = dayjs(dbBlock.start_time)
+  const endDayjs = dayjs(dbBlock.end_time)
+  const startDate = startDayjs.format('YYYY-MM-DD')
+  const endDate = endDayjs.format('YYYY-MM-DD')
+
+  // 还原 24:00：
+  //   - 新数据：frontendBlockToDb 已将 24:00 转为次日 00:00 存储
+  //     → end 日期 > start 日期 且 HH:mm="00:00"
+  //   - 旧数据：存储了无效的 "T24:00:00"，dayjs 也归一化为次日 00:00
+  //     → end 日期 == start 日期 且 HH:mm="00:00"（同天 00:00 实际不存在]
+  // 两种情况下若 end 的 HH:mm 为 00:00 且不是同一天同时间（即不是 00:00~00:00 的空块）
+  let endTime = endDayjs.format('HH:mm')
+  if (endTime === '00:00' && endDate > startDate) {
+    // 新数据路径：end 在次日，确认为前一天的 24:00
+    endTime = '24:00'
+  } else if (endTime === '00:00' && startDate === endDate && startDayjs.format('HH:mm') !== '00:00') {
+    // 旧数据兼容：同一天内 start≠00:00 但 end=00:00，说明是旧版 24:00 被归一化
+    endTime = '24:00'
+  }
+
   return {
     id: dbBlock.id,
     noteId: dbBlock.note_id,
@@ -30,26 +50,39 @@ function dbBlockToFrontend(dbBlock) {
     noteColor: dbBlock.note_color || '#909399',
     title: dbBlock.title,
     description: dbBlock.description,
-    startTime: dayjs(dbBlock.start_time).format('HH:mm'),
-    endTime: dayjs(dbBlock.end_time).format('HH:mm'),
-    date: dayjs(dbBlock.start_time).format('YYYY-MM-DD'),
+    startTime: startDayjs.format('HH:mm'),
+    endTime: endTime,
+    date: startDate,
     isCompleted: dbBlock.is_completed === 1,
     remark: dbBlock.description || '',
-    note: dbBlock.description || ''  // 添加 note 字段，与 TimeBlockItem.vue 保持一致
+    note: dbBlock.description || ''
   }
 }
 
 /**
  * 时间块数据格式转换（前端 → 数据库）
+ * 策略：避免存入无效的 "24:00"，结束于 24:00 的时间块以次日 00:00 存储
+ *      读回时由 dbBlockToFrontend 检测还原
  */
 function frontendBlockToDb(block) {
   const date = block.date || dayjs().format('YYYY-MM-DD')
+  const startTime = `${date}T${block.startTime}:00`
+
+  // 24:00 结束 → 转为次日 00:00 存储（ISO 8601 合法格式）
+  let endTime
+  if (block.endTime === '24:00') {
+    const nextDate = dayjs(date).add(1, 'day').format('YYYY-MM-DD')
+    endTime = `${nextDate}T00:00:00`
+  } else {
+    endTime = `${date}T${block.endTime}:00`
+  }
+
   return {
     note_id: block.noteId || null,
     title: block.title || block.noteName || '未命名',
-    description: block.remark || block.note || block.description || null,  // 添加 note 字段处理
-    start_time: `${date}T${block.startTime}:00`,  // 使用本地时间，避免UTC时区偏移
-    end_time: `${date}T${block.endTime}:00`,      // 使用本地时间，避免UTC时区偏移
+    description: block.remark || block.note || block.description || null,
+    start_time: startTime,
+    end_time: endTime,
     is_completed: block.isCompleted ? 1 : 0
   }
 }
