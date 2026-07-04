@@ -224,7 +224,10 @@ const pieOption = computed(() => {
 
   return {
     tooltip: { trigger: 'item' },
-    legend: { bottom: '0%' },
+    legend: {
+      bottom: '0%',
+      textStyle: { color: getCssVar('--chart-label-color') }
+    },
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],

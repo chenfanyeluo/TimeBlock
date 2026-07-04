@@ -373,13 +373,15 @@ const pieOption = computed(() => {
       label: {
         show: true,
         fontSize: 10,
+        color: getCssVar('--chart-label-color'),
         formatter: '{b}\n{d}%',
         overflow: 'truncate',
         width: 60
       },
       labelLine: {
         length: 10,
-        length2: 8
+        length2: 8,
+        lineStyle: { color: getCssVar('--chart-label-color') }
       },
       data: pieData
     }]
