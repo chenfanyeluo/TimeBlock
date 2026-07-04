@@ -92,10 +92,10 @@ async function deleteAccount(req, res, next) {
     // 软删除用户（paranoid 模式自动设置 deleted_at）
     await user.destroy()
 
-    // 软删除便签和时间块（Note / TimeBlock 开启了 paranoid）
+    // 软删除便签和时间块（paranoid 模式: destroy() 自动设置 deleted_at）
     await Promise.all([
-      Note.update({ deleted_at: now }, { where: { user_id: user.id, deleted_at: null } }),
-      TimeBlock.update({ deleted_at: now }, { where: { user_id: user.id, deleted_at: null } })
+      Note.destroy({ where: { user_id: user.id } }),
+      TimeBlock.destroy({ where: { user_id: user.id } })
     ])
 
     // 硬删除提醒、同步日志、统计数据（无 paranoid，属于可丢弃数据）
