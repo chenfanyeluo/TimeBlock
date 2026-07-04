@@ -1,8 +1,4 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import DayView from '@views/DayView.vue'
-import StatsView from '@views/StatsView.vue'
-import SettingsView from '@views/SettingsView.vue'
-import SettingsDetailView from '@views/SettingsDetailView.vue'
 
 const routes = [
   {
@@ -12,26 +8,26 @@ const routes = [
   {
     path: '/record',
     name: 'Record',
-    component: DayView,
+    component: () => import('@views/DayView.vue'),
     meta: { title: '记录', icon: 'EditPen' }
   },
   {
     path: '/stats',
     name: 'Stats',
-    component: StatsView,
+    component: () => import('@views/StatsView.vue'),
     meta: { title: '统计', icon: 'DataAnalysis' }
   },
   {
     path: '/settings',
     name: 'Settings',
-    component: SettingsView,
+    component: () => import('@views/SettingsView.vue'),
     meta: { title: '设置', icon: 'Setting' }
   },
   // 子设置页面（移动端使用页面跳转）
   {
     path: '/settings/:key',
     name: 'SettingsDetail',
-    component: SettingsDetailView,
+    component: () => import('@views/SettingsDetailView.vue'),
     meta: { title: '设置详情', icon: 'Setting', hidden: true }
   }
 ]
