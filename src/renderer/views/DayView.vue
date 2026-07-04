@@ -1652,12 +1652,13 @@ onBeforeUnmount(() => {
   background: var(--bg-secondary);
   flex-wrap: nowrap; // PC端不换行
 
-  // 移动端：切换为多行布局
+  // 移动端：切换为多行布局，并预留顶部安全区域
   &.is-mobile {
     flex-direction: column;
     flex-wrap: nowrap;
     gap: 8px;
     padding: 8px 12px 6px;
+    padding-top: calc(8px + env(safe-area-inset-top)); // 前置摄像头/刘海区域留空
   }
 
   .header-left {
@@ -1775,6 +1776,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  // 桌面端保持卡片样式
   margin: 8px;
   margin-top: 4px;
   border-radius: 8px;
@@ -2403,10 +2405,13 @@ onBeforeUnmount(() => {
 
 // Level 3: 移动端竖屏优化布局（≤767px）
 @media screen and (max-width: 767px) {
-  // 时间网格区域边距减小
+  // 时间网格区域去掉外间距，顶到屏幕边缘
   .day-view-content {
-    margin: 4px;
-    margin-right: 0; // 右侧为便签栏,去掉右边距
+    margin: 0; // 移除外圈边距
+    margin-top: 0;
+    border-radius: 0; // 移除圆角卡片样式
+    box-shadow: none; // 移除阴影
+    background: var(--bg-secondary); // 保持背景色
   }
 
   // 时间轴保持宽度,优化字体大小

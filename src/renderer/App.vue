@@ -69,10 +69,10 @@ onMounted(() => {
     background: var(--bg-primary);
   }
 
-  // 移动端主内容区域（预留底部 TabBar 空间）
+  // 移动端主内容区域（预留底部 TabBar 空间 + 安全区域）
   .mobile-content {
     padding-bottom: 56px; // TabBar 高度
-    padding-bottom: calc(56px + env(safe-area-inset-bottom)); // iOS 安全区域
+    padding-bottom: calc(56px + env(safe-area-inset-bottom)); // iOS/Android 安全区域（底部导航键留空）
   }
 }
 </style>
