@@ -21,6 +21,19 @@ router.post('/login', [
   validate
 ], authController.login)
 
+// POST /api/auth/forgot-password
+router.post('/forgot-password', [
+  body('email').isEmail().withMessage('邮箱格式不正确'),
+  validate
+], authController.forgotPassword)
+
+// POST /api/auth/reset-password
+router.post('/reset-password', [
+  body('token').notEmpty().withMessage('重置Token不能为空'),
+  body('newPassword').isLength({ min: 6 }).withMessage('密码长度至少6位'),
+  validate
+], authController.resetPassword)
+
 // POST /api/auth/refresh
 router.post('/refresh', authenticate, authController.refresh)
 

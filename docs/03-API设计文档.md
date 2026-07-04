@@ -169,6 +169,60 @@ Authorization: Bearer {accessToken}
 
 ---
 
+### 2.5 密码找回
+
+**接口地址**: `POST /auth/forgot-password`
+
+**请求参数**:
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "data": {
+    "message": "重置Token已生成",
+    "expiresIn": 3600
+  }
+}
+```
+
+---
+
+### 2.6 重置密码
+
+**接口地址**: `POST /auth/reset-password`
+
+**请求参数**:
+```json
+{
+  "token": "abc123...",
+  "newPassword": "newpassword456"
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+    "user": {
+      "id": 1,
+      "email": "user@example.com",
+      "name": "张三"
+    },
+    "message": "密码已重置成功"
+  }
+}
+```
+
+---
+
 ## 3. 用户模块 API
 
 ### 3.1 更新用户信息
@@ -551,13 +605,11 @@ Content-Type: multipart/form-data
 
 ---
 
-## 8. 计时器模块 API
+## 8. 数据同步模块 API
 
-> 对应数据库表：`active_timers`（每用户同时仅一个运行中的计时器）
+### 8.1 上传本地变更
 
-### 8.1 开始计时
-
-**接口地址**: `POST /timers/start`
+**接口地址**: `POST /sync/upload`
 
 **请求头**:
 ```
@@ -567,77 +619,46 @@ Authorization: Bearer {accessToken}
 **请求参数**:
 ```json
 {
-  "title": "开发需求分析",
-  "noteId": 1
+  "changes": {
+    "notes": [...],
+    "timeBlocks": [...]
+  },
+  "lastSyncAt": "2024-01-01T00:00:00Z",
+  "deviceId": "web-client"
 }
 ```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "userId": 1,
-    "title": "开发需求分析",
-    "noteId": 1,
-    "startedAt": "2024-06-07T09:30:00Z",
-    "isPaused": false,
-    "elapsedPaused": 0,
-    "createdAt": "2024-06-07T09:30:00Z"
-  }
-}
-```
-
-**业务规则**:
-- 如果该用户已有运行中的计时器，返回 `409 CONFLICT`（需先停止当前计时器）
-- `noteId` 为可选，不传则创建无便签的计时器
 
 ---
 
-### 8.2 停止计时
+### 8.2 下载云端变更
 
-**接口地址**: `POST /timers/stop`
+**接口地址**: `GET /sync/download`
 
 **请求头**:
 ```
 Authorization: Bearer {accessToken}
 ```
 
-**请求参数**（可选，停止时可修改最终信息）:
-```json
-{
-  "title": "开发需求分析（已完成）",
-  "noteId": 1,
-  "description": "完成项目需求分析文档"
-}
-```
+**查询参数**:
+- `lastSyncAt`: 上次同步时间（可选）
 
-**响应示例**: 返回新创建的时间块记录
+**响应示例**:
 ```json
 {
   "success": true,
   "data": {
-    "timeBlockId": 42,
-    "title": "开发需求分析（已完成）",
-    "startTime": "2024-06-07T09:30:00Z",
-    "endTime": "2024-06-07T11:15:23Z",
-    "durationSeconds": 6323,
-    "message": "已保存为时间块"
+    "serverTime": "2024-01-01T12:00:00Z",
+    "notes": [...],
+    "timeBlocks": [...]
   }
 }
 ```
 
-**业务规则**:
-- 自动计算总耗时 = `(now - started_at) - elapsed_paused`
-- 将结果写入 `time_blocks` 表（start_time=started_at, end_time=now）
-- 删除 `active_timers` 中对应记录
-- 若用户无运行中的计时器，返回 `404 NOT_FOUND`
-
 ---
 
-### 8.3 暂停计时
+### 8.3 获取同步状态
 
-**接口地址**: `POST /timers/pause`
+**接口地址**: `GET /sync/status`
 
 **请求头**:
 ```
@@ -649,86 +670,29 @@ Authorization: Bearer {accessToken}
 {
   "success": true,
   "data": {
-    "isPaused": true,
-    "elapsedPaused": 600,
-    "message": "已暂停，累计暂停时长 10 分钟"
+    "lastSyncAt": "2024-01-01T00:00:00Z",
+    "lastSyncId": 123,
+    "totalSyncs": 10,
+    "failedSyncs": 0,
+    "isOnline": true
   }
 }
 ```
 
-**业务规则**:
-- 更新 `active_timers.is_paused = 1`
-- 累加本次暂停时长到 `elapsed_paused`
-- 已暂停的计时器再次调用幂等返回当前状态
-
 ---
 
-### 8.4 恢复计时
+### 8.4 获取同步日志
 
-**接口地址**: `POST /timers/resume`
+**接口地址**: `GET /sync/logs`
 
 **请求头**:
 ```
 Authorization: Bearer {accessToken}
 ```
 
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "isPaused": false,
-    "elapsedPaused": 600,
-    "message": "已恢复计时"
-  }
-}
-```
-
-**业务规则**:
-- 设置 `active_timers.is_paused = 0`
-- 未在暂停状态时调用幂等返回当前状态
-
----
-
-### 8.5 查询运行中计时器
-
-**接口地址**: `GET /timers/active`
-
-**请求头**:
-```
-Authorization: Bearer {accessToken}
-```
-
-**响应示例 - 有运行中的计时器**:
-```json
-{
-  "success": true,
-  "data": {
-    "userId": 1,
-    "timeBlockId": null,
-    "title": "开发需求分析",
-    "noteId": 1,
-    "note": { "id": 1, "name": "工作", "color": "#409eff" },
-    "startedAt": "2024-06-07T09:30:00Z",
-    "isPaused": false,
-    "elapsedPaused": 0,
-    "elapsedTotal": 3600,
-    "createdAt": "2024-06-07T09:30:00Z"
-  }
-}
-```
-
-**响应示例 - 无运行中的计时器**:
-```json
-{
-  "success": true,
-  "data": null
-}
-```
-
-**说明**:
-- `elapsedTotal` 由服务端实时计算：`(now - started_at) - elapsed_paused`（未暂停时）或直接取 `elapsed_paused`（已暂停时）
-- 此接口用于：应用启动时检查是否有需要恢复的计时器、跨设备同步计时器状态
+**查询参数**:
+- `page`: 页码
+- `pageSize`: 每页数量
 
 ---
 
@@ -736,6 +700,7 @@ Authorization: Bearer {accessToken}
 
 | 错误码 | HTTP状态码 | 描述 | 触发场景 |
 |--------|----------|------|---------|
-| TIMER_ALREADY_RUNNING | 409 | 用户已有运行中的计时器 | 调用 POST /timers/start 时 |
-| TIMER_NOT_FOUND | 404 | 无运行中的计时器 | 调用 stop/pause/resume 时 |
+| INVALID_TOKEN | 400 | 重置Token无效或已过期 | 调用 POST /auth/reset-password 时 |
+| NETWORK_ERROR | - | 网络连接失败 | 同步操作时 |
+| SYNC_CONFLICT | 409 | 数据同步冲突 | 上传/下载时检测到冲突 |
 

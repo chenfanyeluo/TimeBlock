@@ -20,7 +20,7 @@ USE `time_block`;
 -- --------------------------------------------------------------------------
 -- 说明: 存储用户基本信息，支持软删除（deleted_at）
 -- 索引: 主键 id, 唯一索引 email, 软删除索引 deleted_at
-DROP TABLE IF EXISTS `active_timers`;
+DROP TABLE IF EXISTS `reminders`;
 DROP TABLE IF EXISTS `sync_logs`;
 DROP TABLE IF EXISTS `statistics`;
 DROP TABLE IF EXISTS `time_blocks`;
@@ -33,6 +33,8 @@ CREATE TABLE `users` (
   `password`    VARCHAR(255)  NOT NULL                COMMENT '加密密码 (bcrypt)',
   `name`        VARCHAR(100)  NOT NULL                COMMENT '用户姓名',
   `avatar`      VARCHAR(500)  NULL     DEFAULT NULL   COMMENT '头像URL',
+  `reset_token`       VARCHAR(255)  NULL     DEFAULT NULL   COMMENT '密码重置Token',
+  `reset_token_expires` DATETIME      NULL     DEFAULT NULL   COMMENT '重置Token过期时间',
   `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted_at`  DATETIME      NULL     DEFAULT NULL   COMMENT '删除时间 (NULL=未删除)',
@@ -47,19 +49,23 @@ CREATE TABLE `users` (
 -- --------------------------------------------------------------------------
 -- 3. notes 便签表
 -- --------------------------------------------------------------------------
--- 说明: 用户自定义便签（颜色+名称），直接拖入时间块使用
+-- 说明: 用户自定义便签（颜色+名称），支持自动提醒配置
+-- 新增字段: auto_remind（是否自动提醒）、default_advance_minutes（默认提前分钟数）
 -- 外键: user_id -> users(id) ON DELETE CASCADE
 CREATE TABLE `notes` (
-  `id`          BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `user_id`     BIGINT        NOT NULL                COMMENT '所属用户ID',
-  `name`        VARCHAR(100)  NOT NULL                COMMENT '便签名称',
-  `color`       VARCHAR(7)    NOT NULL DEFAULT '#409eff' COMMENT '便签颜色 (HEX)',
-  `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted_at`  DATETIME      NULL     DEFAULT NULL   COMMENT '删除时间 (NULL=未删除)',
+  `id`                      BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_id`                 BIGINT        NOT NULL                COMMENT '所属用户ID',
+  `name`                    VARCHAR(100)  NOT NULL                COMMENT '便签名称',
+  `color`                   VARCHAR(7)    NOT NULL DEFAULT '#409eff' COMMENT '便签颜色 (HEX)',
+  `auto_remind`             TINYINT(1)    NOT NULL DEFAULT 0      COMMENT '是否自动提醒 (0/1)',
+  `default_advance_minutes` INT           NOT NULL DEFAULT 5      COMMENT '默认提前提醒分钟数',
+  `created_at`              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted_at`              DATETIME      NULL     DEFAULT NULL   COMMENT '删除时间 (NULL=未删除)',
   PRIMARY KEY (`id`),
   INDEX `idx_user_id` (`user_id`),
   INDEX `idx_deleted` (`deleted_at`),
+  INDEX `idx_auto_remind` (`auto_remind`),
   CONSTRAINT `fk_note_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
@@ -104,32 +110,45 @@ CREATE TABLE `time_blocks` (
   COMMENT='时间块表';
 
 -- --------------------------------------------------------------------------
--- 5. active_timers 计时器运行状态表
+-- 5. reminders 提醒通知表
 -- --------------------------------------------------------------------------
--- 说明: 记录用户当前正在运行的计时器，每用户同时仅一个运行中的计时器
+-- 说明: 存储用户设置的提醒通知，支持时间块级别和便签级别提醒
+-- 新增字段: is_auto（是否自动生成）、note_id（关联便签，用于自动提醒）
 -- 设计要点:
---   - PRIMARY KEY = user_id，保证每用户唯一一条运行中计时器
---   - time_block_id 可为 NULL：启动时不立即关联 time_blocks，停止时才写入
---   - elapsed_paused + is_paused：支持暂停/恢复功能
--- 使用流程: 开始计时 -> INSERT | 暂停 -> UPDATE is_paused | 恢复 -> UPDATE is_paused
---           停止计时 -> 写入 time_blocks + DELETE active_timers
-CREATE TABLE `active_timers` (
-  `user_id`          BIGINT        NOT NULL                COMMENT '所属用户ID（主键，每用户唯一）',
-  `time_block_id`    BIGINT        NULL     DEFAULT NULL   COMMENT '关联的时间块ID（停止后回写）',
-  `title`            VARCHAR(200)  NOT NULL                COMMENT '计时器标题',
-  `note_id`        BIGINT        NULL     DEFAULT NULL   COMMENT '便签ID',
-  `started_at`       TIMESTAMP     NOT NULL                COMMENT '计时器启动时间 (UTC)',
-  `elapsed_paused`   INT           NOT NULL DEFAULT 0      COMMENT '累计暂停时长（秒），支持暂停/恢复',
-  `is_paused`        TINYINT(1)    NOT NULL DEFAULT 0      COMMENT '是否处于暂停状态 (0/1)',
-  `created_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`user_id`),
-  INDEX `idx_timer_block` (`time_block_id`),
-  CONSTRAINT `fk_timer_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_timer_timeblock` FOREIGN KEY (`time_block_id`) REFERENCES `time_blocks`(`id`) ON DELETE SET NULL
+--   - target_type: 提醒目标类型（time_block 或 note）
+--   - target_id: 关联的时间块ID或便签ID
+--   - is_auto: 是否由便签自动提醒功能生成
+--   - status: 提醒状态（pending/triggered/dismissed/cancelled）
+--   - advance_minutes: 提前提醒分钟数
+CREATE TABLE `reminders` (
+  `id`              BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_id`         BIGINT        NOT NULL                COMMENT '所属用户ID',
+  `target_type`     VARCHAR(20)   NOT NULL DEFAULT 'time_block' COMMENT '提醒目标类型: time_block/note',
+  `target_id`       BIGINT        NOT NULL                COMMENT '目标ID（时间块ID或便签ID）',
+  `remind_at`       DATETIME      NOT NULL                COMMENT '提醒触发时间',
+  `advance_minutes` INT           NOT NULL DEFAULT 0      COMMENT '提前提醒分钟数',
+  `is_auto`         TINYINT(1)    NOT NULL DEFAULT 0      COMMENT '是否自动生成 (0/1)',
+  `note_id`         BIGINT        NULL     DEFAULT NULL   COMMENT '关联便签ID（自动提醒时记录）',
+  `title`           VARCHAR(200)  NOT NULL                COMMENT '提醒标题',
+  `message`         TEXT          NULL     DEFAULT NULL   COMMENT '提醒消息内容',
+  `status`          VARCHAR(20)   NOT NULL DEFAULT 'pending' COMMENT '状态: pending/triggered/dismissed/cancelled',
+  `triggered_at`    DATETIME      NULL     DEFAULT NULL   COMMENT '触发时间',
+  `dismissed_at`    DATETIME      NULL     DEFAULT NULL   COMMENT '关闭时间',
+  `created_at`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_reminder_user` (`user_id`),
+  INDEX `idx_reminder_target` (`target_type`, `target_id`),
+  INDEX `idx_reminder_status` (`user_id`, `status`, `remind_at`),
+  INDEX `idx_reminder_note` (`note_id`),
+  INDEX `idx_reminder_auto` (`is_auto`),
+  CONSTRAINT `fk_reminder_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_reminder_timeblock` FOREIGN KEY (`target_id`) REFERENCES `time_blocks`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_reminder_note` FOREIGN KEY (`note_id`) REFERENCES `notes`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
-  COMMENT='计时器运行状态表';
+  COMMENT='提醒通知表';
 
 -- --------------------------------------------------------------------------
 -- 6. sync_logs 同步记录表

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import dayjs from 'dayjs'
 import { storage } from '@shared/platform'
 import { platformInfo, database } from '@shared/platform'
+import { createTimeBlockReminder, cancelTimeBlockReminder } from '../services/reminder'
 
 /**
  * 检查是否支持数据库（Electron 或 Capacitor）
@@ -216,14 +217,7 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
 
         if (!database.isReady()) {
           console.warn('[Store] 数据库初始化超时，使用默认便签')
-          notes.value = [
-            { id: 1, name: '工作', color: '#409eff' },
-            { id: 2, name: '学习', color: '#67c23a' },
-            { id: 3, name: '休息', color: '#e6a23c' },
-            { id: 4, name: '运动', color: '#f56c6c' },
-            { id: 5, name: '生活', color: '#9254de' },
-            { id: 6, name: '其他', color: '#909399' }
-          ]
+          await initDefaultNotes()
           return
         }
 
@@ -231,15 +225,8 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         console.log('[Store] Capacitor 查询结果:', result)
 
         if (result.length === 0) {
-          console.warn('[Store] 数据库中没有便签数据，使用默认便签')
-          notes.value = [
-            { id: 1, name: '工作', color: '#409eff' },
-            { id: 2, name: '学习', color: '#67c23a' },
-            { id: 3, name: '休息', color: '#e6a23c' },
-            { id: 4, name: '运动', color: '#f56c6c' },
-            { id: 5, name: '生活', color: '#9254de' },
-            { id: 6, name: '其他', color: '#909399' }
-          ]
+          console.warn('[Store] 数据库中没有便签数据，初始化默认便签')
+          await initDefaultNotes()
           return
         }
 
@@ -254,6 +241,10 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         console.log('[Store] Electron 平台：从数据库加载便签')
         const result = await window.electronAPI.getAllNotes()
         if (result.success && result.data) {
+          if (result.data.length === 0) {
+            await initDefaultNotes()
+            return
+          }
           notes.value = result.data.map(note => ({
             id: note.id,  // ⚠️ 确保使用数字 ID
             name: note.name,
@@ -274,6 +265,181 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         { id: 6, name: '其他', color: '#909399' }
       ]
     }
+  }
+
+  /**
+   * 初始化默认便签（写入数据库）
+   */
+  async function initDefaultNotes() {
+    const defaultNotes = [
+      { name: '工作', color: '#409eff' },
+      { name: '学习', color: '#67c23a' },
+      { name: '休息', color: '#e6a23c' },
+      { name: '运动', color: '#f56c6c' },
+      { name: '生活', color: '#9254de' },
+      { name: '其他', color: '#909399' }
+    ]
+
+    try {
+      if (platformInfo.isCapacitor && database.isReady()) {
+        for (const note of defaultNotes) {
+          await database.run(
+            'INSERT INTO notes (user_id, name, color) VALUES (1, ?, ?);',
+            [note.name, note.color]
+          )
+        }
+        // 重新加载
+        const result = await database.query('SELECT * FROM notes WHERE user_id = 1 AND deleted_at IS NULL')
+        notes.value = result.map(n => ({ id: n.id, name: n.name, color: n.color }))
+        console.log('[Store] ✅ 初始化默认便签成功:', notes.value.length)
+      } else if (isElectron()) {
+        for (const note of defaultNotes) {
+          await window.electronAPI.createNote(note)
+        }
+        const result = await window.electronAPI.getAllNotes()
+        if (result.success && result.data) {
+          notes.value = result.data.map(n => ({ id: n.id, name: n.name, color: n.color }))
+        }
+        console.log('[Store] ✅ Electron 初始化默认便签成功:', notes.value.length)
+      } else {
+        // Web端直接使用默认值（不持久化）
+        notes.value = defaultNotes.map((n, i) => ({ id: i + 1, ...n }))
+      }
+    } catch (err) {
+      console.error('[Store] 初始化默认便签失败:', err)
+      notes.value = defaultNotes.map((n, i) => ({ id: i + 1, ...n }))
+    }
+  }
+
+  /**
+   * 创建新便签（持久化到数据库）
+   */
+  async function createNote(noteData) {
+    console.log('[Store] createNote:', noteData)
+
+    if (supportsDatabase()) {
+      try {
+        if (platformInfo.isCapacitor && database.isReady()) {
+          const result = await database.run(
+            'INSERT INTO notes (user_id, name, color) VALUES (1, ?, ?);',
+            [noteData.name, noteData.color || '#909399']
+          )
+          const newNote = await database.query(
+            'SELECT * FROM notes WHERE id = ?;',
+            [result.lastInsertRowid]
+          )
+          if (newNote.length > 0) {
+            notes.value.push({
+              id: newNote[0].id,
+              name: newNote[0].name,
+              color: newNote[0].color
+            })
+            console.log('[Store] ✅ Capacitor 创建便签成功:', newNote[0])
+            return notes.value[notes.value.length - 1]
+          }
+        } else if (isElectron()) {
+          const result = await window.electronAPI.createNote(noteData)
+          if (result.success && result.data) {
+            notes.value.push({
+              id: result.data.id,
+              name: result.data.name,
+              color: result.data.color
+            })
+            console.log('[Store] ✅ Electron 创建便签成功:', result.data)
+            return notes.value[notes.value.length - 1]
+          }
+        }
+      } catch (err) {
+        console.error('[Store] 创建便签失败:', err)
+      }
+    }
+
+    // 不支持数据库时，仅在内存中添加（使用临时ID）
+    const tempNote = {
+      id: Date.now(),
+      name: noteData.name,
+      color: noteData.color || '#909399'
+    }
+    notes.value.push(tempNote)
+    return tempNote
+  }
+
+  /**
+   * 更新便签（持久化到数据库）
+   */
+  async function updateNote(noteId, updates) {
+    console.log('[Store] updateNote:', noteId, updates)
+    const idx = notes.value.findIndex(n => n.id === noteId)
+    if (idx === -1) return null
+
+    if (supportsDatabase()) {
+      try {
+        if (platformInfo.isCapacitor && database.isReady()) {
+          await database.run(
+            'UPDATE notes SET name = ?, color = ?, updated_at = datetime(\'now\') WHERE id = ?;',
+            [updates.name || notes.value[idx].name, updates.color || notes.value[idx].color, noteId]
+          )
+          notes.value[idx] = { ...notes.value[idx], ...updates }
+          console.log('[Store] ✅ Capacitor 更新便签成功')
+          return notes.value[idx]
+        } else if (isElectron()) {
+          const result = await window.electronAPI.updateNote(noteId, updates)
+          if (result.success) {
+            notes.value[idx] = { ...notes.value[idx], ...updates }
+            console.log('[Store] ✅ Electron 更新便签成功')
+            return notes.value[idx]
+          }
+        }
+      } catch (err) {
+        console.error('[Store] 更新便签失败:', err)
+      }
+    }
+
+    // 本地更新
+    notes.value[idx] = { ...notes.value[idx], ...updates }
+    return notes.value[idx]
+  }
+
+  /**
+   * 删除便签（持久化到数据库）
+   */
+  async function deleteNote(noteId) {
+    console.log('[Store] deleteNote:', noteId)
+    const idx = notes.value.findIndex(n => n.id === noteId)
+    if (idx === -1) return false
+
+    if (supportsDatabase()) {
+      try {
+        if (platformInfo.isCapacitor && database.isReady()) {
+          // 先将关联时间块的 note_id 置空
+          await database.run(
+            'UPDATE time_blocks SET note_id = NULL WHERE note_id = ?;',
+            [noteId]
+          )
+          // 软删除便签
+          await database.run(
+            'UPDATE notes SET deleted_at = datetime(\'now\') WHERE id = ?;',
+            [noteId]
+          )
+          notes.value.splice(idx, 1)
+          console.log('[Store] ✅ Capacitor 删除便签成功')
+          return true
+        } else if (isElectron()) {
+          const result = await window.electronAPI.deleteNote(noteId)
+          if (result.success) {
+            notes.value.splice(idx, 1)
+            console.log('[Store] ✅ Electron 删除便签成功')
+            return true
+          }
+        }
+      } catch (err) {
+        console.error('[Store] 删除便签失败:', err)
+      }
+    }
+
+    // 本地删除
+    notes.value.splice(idx, 1)
+    return true
   }
 
   /**
@@ -465,11 +631,46 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
             `
             const newRecord = await database.query(querySQL, [result.lastInsertRowid])
             console.log('[Store] Capacitor 查询新记录:', newRecord)
-            
+
             if (newRecord.length > 0) {
               const newBlock = dbBlockToFrontend(newRecord[0])
               blocks.value.push(newBlock)
               console.log('[Store] ✅ Capacitor 创建时间块成功:', newBlock.id, newBlock)
+
+              // 1. 如果手动开启提醒，创建提醒
+              if (block.enableReminder) {
+                try {
+                  await createTimeBlockReminder(newBlock, block.advanceMinutes || 5)
+                  console.log('[Store] ✅ 手动提醒创建成功')
+                } catch (reminderErr) {
+                  console.warn('[Store] 创建提醒失败:', reminderErr)
+                }
+              }
+
+              // 2. 检查便签自动提醒（如果是未来的时间块）
+              if (newBlock.noteId && !block.enableReminder) {
+                const startTime = dayjs(`${newBlock.date}T${newBlock.startTime}`)
+                if (startTime.isAfter(dayjs())) {
+                  try {
+                    const noteConfig = await database.query(
+                      `SELECT auto_remind, default_advance_minutes FROM notes WHERE id = ? AND deleted_at IS NULL;`,
+                      [newBlock.noteId]
+                    )
+                    if (noteConfig.length > 0 && noteConfig[0].auto_remind === 1) {
+                      await createTimeBlockReminder(
+                        newBlock,
+                        noteConfig[0].default_advance_minutes,
+                        true, // 自动生成
+                        newBlock.noteId
+                      )
+                      console.log('[Store] ✅ 便签自动提醒创建成功')
+                    }
+                  } catch (autoErr) {
+                    console.warn('[Store] 检查便签自动提醒失败:', autoErr)
+                  }
+                }
+              }
+
               return newBlock
             }
           }
@@ -481,6 +682,38 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
             const newBlock = dbBlockToFrontend(result.data)
             blocks.value.push(newBlock)
             console.log('[Store] Electron 创建时间块:', newBlock.id)
+
+            // 1. 如果手动开启提醒，创建提醒
+            if (block.enableReminder) {
+              try {
+                await createTimeBlockReminder(newBlock, block.advanceMinutes || 5)
+                console.log('[Store] ✅ 手动提醒创建成功')
+              } catch (reminderErr) {
+                console.warn('[Store] 创建提醒失败:', reminderErr)
+              }
+            }
+
+            // 2. 检查便签自动提醒（如果是未来的时间块）
+            if (newBlock.noteId && !block.enableReminder) {
+              const startTime = dayjs(`${newBlock.date}T${newBlock.startTime}`)
+              if (startTime.isAfter(dayjs())) {
+                try {
+                  const noteInfo = await window.electronAPI.getNoteById(newBlock.noteId)
+                  if (noteInfo.success && noteInfo.data && noteInfo.data.auto_remind === 1) {
+                    await createTimeBlockReminder(
+                      newBlock,
+                      noteInfo.data.default_advance_minutes,
+                      true, // 自动生成
+                      newBlock.noteId
+                    )
+                    console.log('[Store] ✅ 便签自动提醒创建成功')
+                  }
+                } catch (autoErr) {
+                  console.warn('[Store] 检查便签自动提醒失败:', autoErr)
+                }
+              }
+            }
+
             return newBlock
           }
         }
@@ -534,6 +767,14 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
   async function deleteBlock(id) {
     pushHistory('删除时间块')
 
+    // 取消关联提醒
+    try {
+      await cancelTimeBlockReminder(id)
+      console.log('[Store] 取消时间块提醒:', id)
+    } catch (err) {
+      console.warn('[Store] 取消提醒失败:', err)
+    }
+
     if (isElectron()) {
       try {
         const result = await window.electronAPI.deleteTimeBlock(id)
@@ -545,9 +786,21 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       } catch (err) {
         console.error('[Store] 删除时间块失败:', err)
       }
+    } else if (platformInfo.isCapacitor && database.isReady()) {
+      try {
+        await database.run(
+          `UPDATE time_blocks SET deleted_at = datetime('now') WHERE id = ?;`,
+          [id]
+        )
+        blocks.value = blocks.value.filter(b => b.id !== id)
+        console.log('[Store] ✅ Capacitor 删除时间块:', id)
+        return true
+      } catch (err) {
+        console.error('[Store] Capacitor 删除时间块失败:', err)
+      }
     }
 
-    // 非 Electron 环境或失败时，本地删除
+    // 非 Electron/Capacitor 环境或失败时，本地删除
     blocks.value = blocks.value.filter(b => b.id !== id)
     return true
   }
@@ -596,6 +849,12 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
     deleteBlock,
     loadMoreBlocks,
     initData,
+    // 便签操作（完整 CRUD）
+    createNote,
+    updateNote,
+    deleteNote,
+    loadNotesFromDB,
+    initDefaultNotes,
     // 便签辅助
     getNoteColor,
     getNoteName,

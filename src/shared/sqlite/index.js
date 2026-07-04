@@ -15,7 +15,7 @@
  *   User        - 用户表 CRUD + 认证
  *   Note        - 便签表 CRUD + 软删除/级联处理
  *   TimeBlock   - 时间块表 CRUD + 日/周/月视图 + 搜索
- *   ActiveTimer - 计时器 start/stop/pause/resume
+ *   Reminder    - 提醒通知 CRUD + 定时触发检查
  *   SyncLog     - 同步日志记录
  *   Statistic   - 统计汇总预计算
  *
@@ -34,7 +34,7 @@ const SCHEMA_SQL = require('./schema')
 const User = require('./User')
 const Note = require('./Note')
 const TimeBlock = require('./TimeBlock')
-const ActiveTimer = require('./ActiveTimer')
+const Reminder = require('./Reminder')
 const SyncLog = require('./SyncLog')
 const Statistic = require('./Statistic')
 
@@ -94,7 +94,7 @@ module.exports = {
   user: User,
   note: Note,
   timeBlock: TimeBlock,
-  activeTimer: ActiveTimer,
+  reminder: Reminder,
   syncLog: SyncLog,
   statistic: Statistic
 }

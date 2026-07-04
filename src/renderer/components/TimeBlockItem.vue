@@ -38,6 +38,10 @@
         <span class="category-badge" :style="{ background: categoryColor }">
           {{ categoryName }}
         </span>
+        <!-- 提醒状态图标 -->
+        <span v-if="hasReminder" class="reminder-badge" title="已设置提醒">
+          <el-icon><Bell /></el-icon>
+        </span>
       </div>
       <div class="block-content">{{ block.taskName }}</div>
 
@@ -69,6 +73,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { Bell } from '@element-plus/icons-vue'
 import { useTimeBlockStore } from '@stores/timeBlock'
 
 const props = defineProps({
@@ -77,7 +82,8 @@ const props = defineProps({
   isMulti: { type: Boolean, default: false },
   multiIndex: { type: Number, default: 0 },
   multiTotal: { type: Number, default: 1 },
-  selected: { type: Boolean, default: false }
+  selected: { type: Boolean, default: false },
+  hasReminder: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update', 'delete', 'select', 'recycle', 'drag-over-pool', 'mobile-block-drag-start', 'mobile-block-drag-move', 'mobile-block-drag-end', 'mobile-context-menu'])
@@ -616,6 +622,25 @@ function onBlockTouchEnd(e) {
     white-space: nowrap;
     flex-shrink: 0;
   }
+
+  .reminder-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: var(--color-warning);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 12px;
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .block-content {
