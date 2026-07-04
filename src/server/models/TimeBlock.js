@@ -51,12 +51,6 @@ const TimeBlock = sequelize.define('TimeBlock', {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: false
-  },
-  deleted_at: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    defaultValue: null,
-    comment: '软删除时间'
   }
 }, {
   tableName: 'time_blocks',
