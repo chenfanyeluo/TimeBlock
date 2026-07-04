@@ -41,7 +41,12 @@ async function updateProfile(req, res, next) {
 async function changePassword(req, res, next) {
   try {
     const { oldPassword, newPassword } = req.body
-    const user = req.user
+
+    // 重新查询用户（auth中间件排除了password，需要包含密码用于验证）
+    const user = await User.findByPk(req.user.id)
+    if (!user) {
+      return error(res, 'UNAUTHORIZED', '用户不存在', 401)
+    }
 
     // 验证旧密码
     const isOldPasswordValid = await bcrypt.compare(oldPassword, user.password)
@@ -67,7 +72,12 @@ async function changePassword(req, res, next) {
 async function deleteAccount(req, res, next) {
   try {
     const { password } = req.body
-    const user = req.user
+
+    // 重新查询用户（auth中间件排除了password，需要包含密码用于验证）
+    const user = await User.findByPk(req.user.id)
+    if (!user) {
+      return error(res, 'UNAUTHORIZED', '用户不存在', 401)
+    }
 
     if (!password) {
       return error(res, 'VALIDATION_ERROR', '请输入密码以确认注销', 400)
