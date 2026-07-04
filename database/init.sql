@@ -143,8 +143,9 @@ CREATE TABLE `reminders` (
   INDEX `idx_reminder_note` (`note_id`),
   INDEX `idx_reminder_auto` (`is_auto`),
   CONSTRAINT `fk_reminder_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_reminder_timeblock` FOREIGN KEY (`target_id`) REFERENCES `time_blocks`(`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_reminder_note` FOREIGN KEY (`note_id`) REFERENCES `notes`(`id`) ON DELETE SET NULL
+  -- 注意: target_id 为 polymorphic 字段（time_block/note），不创建外键约束，
+  -- 否则 target_type='note' 时无法插入。业务层通过 target_type + target_id 维护逻辑关联。
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci

@@ -112,15 +112,14 @@ const SCHEMA_SQL = [
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
     updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (target_id) REFERENCES time_blocks(id) ON DELETE CASCADE,
     FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE SET NULL
+    -- target_id 为 polymorphic 字段（time_block/note），不创建外键约束
   );`,
 
-  // 提醒表索引
+  // 提醒表索引（与 MySQL DDL 对齐）
   `CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id);`,
   `CREATE INDEX IF NOT EXISTS idx_reminders_target ON reminders(target_type, target_id);`,
-  `CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(user_id, remind_at, status);`,
-  `CREATE INDEX IF NOT EXISTS idx_reminders_status ON reminders(status);`,
+  `CREATE INDEX IF NOT EXISTS idx_reminder_status ON reminders(user_id, status, remind_at);`,
   `CREATE INDEX IF NOT EXISTS idx_reminders_note ON reminders(note_id);`,
   `CREATE INDEX IF NOT EXISTS idx_reminders_auto ON reminders(is_auto);`,
 

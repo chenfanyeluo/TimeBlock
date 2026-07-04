@@ -58,19 +58,33 @@ const TimeBlock = sequelize.define('TimeBlock', {
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',
+  paranoid: true,
+  deletedAt: 'deleted_at',
   indexes: [
     {
       name: 'idx_timeblocks_user_id',
       fields: ['user_id']
     },
     {
-      name: 'idx_timeblocks_note_id',
-      fields: ['note_id']
+      // 联合索引，替代原单列 note_id 索引，实现租户隔离
+      name: 'idx_user_note',
+      fields: ['user_id', 'note_id']
     },
     {
-      name: 'idx_timeblocks_time_range',
+      name: 'idx_time_range',
       fields: ['user_id', 'start_time', 'end_time']
+    },
+    {
+      // 日视图覆盖索引，减少回表
+      name: 'idx_user_date_covering',
+      fields: ['user_id', 'deleted_at', 'start_time', 'end_time', 'note_id', 'title', 'is_completed']
+    },
+    {
+      name: 'idx_timeblocks_deleted',
+      fields: ['deleted_at']
     }
+    // 注意：FULLTEXT 索引 ft_title_desc(title, description) 为 MySQL 专用，
+    // 由 database/init.sql 管理，Sequelize 模型层不创建，避免 SQLite 不兼容。
   ]
 })
 

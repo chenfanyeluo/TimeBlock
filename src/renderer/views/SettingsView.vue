@@ -170,9 +170,20 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="提醒管理">
+        <el-tab-pane label="通用设置">
+          <el-form label-width="120px" class="settings-form">
+            <el-form-item label="默认视图">
+              <el-radio-group v-model="defaultView">
+                <el-radio-button label="record">记录</el-radio-button>
+                <el-radio-button label="stats">统计</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+          </el-form>
+
+          <!-- 提醒管理区域 -->
+          <el-divider content-position="left">提醒管理</el-divider>
           <div class="reminder-section" v-loading="loadingReminders">
-            <!-- 时间块提醒区域 -->
+            <!-- 时间块提醒 -->
             <el-card class="reminder-card">
               <template #header>时间块提醒</template>
               <div v-if="reminderTimeBlocks.length === 0" class="empty-hint">
@@ -199,7 +210,7 @@
               </div>
             </el-card>
 
-            <!-- 便签自动提醒区域 -->
+            <!-- 便签自动提醒 -->
             <el-card class="reminder-card">
               <template #header>便签自动提醒</template>
               <div v-if="notes.length === 0" class="empty-hint">
@@ -216,12 +227,6 @@
                     <span class="note-name">{{ note.name }}</span>
                   </div>
                   <div class="note-remind-controls">
-                    <el-switch
-                      :model-value="note.auto_remind === 1"
-                      @change="(val) => toggleNoteAutoRemind(note.id, val, note.default_advance_minutes || 5)"
-                      active-text="开"
-                      inactive-text="关"
-                    />
                     <el-input-number
                       v-if="note.auto_remind === 1"
                       :model-value="note.default_advance_minutes || 5"
@@ -229,25 +234,20 @@
                       :min="1"
                       :max="60"
                       size="small"
-                      style="width: 100px; margin-left: 8px;"
+                      style="width: 100px;"
                     />
                     <span v-if="note.auto_remind === 1" class="advance-hint">分钟前提醒</span>
+                    <el-switch
+                      :model-value="note.auto_remind === 1"
+                      @change="(val) => toggleNoteAutoRemind(note.id, val, note.default_advance_minutes || 5)"
+                      active-text="开"
+                      inactive-text="关"
+                    />
                   </div>
                 </div>
               </div>
             </el-card>
           </div>
-        </el-tab-pane>
-
-        <el-tab-pane label="通用设置">
-          <el-form label-width="120px" class="settings-form">
-            <el-form-item label="默认视图">
-              <el-radio-group v-model="defaultView">
-                <el-radio-button label="record">记录</el-radio-button>
-                <el-radio-button label="stats">统计</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-          </el-form>
         </el-tab-pane>
 
         <el-tab-pane label="外观设置">
@@ -337,12 +337,13 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Delete, Plus, Download, Upload, ArrowRight, Connection, User, Tickets, Setting, Brush, FolderOpened, Bell } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, Plus, Download, Upload, ArrowRight, Connection, User, Tickets, Setting, Brush, FolderOpened } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
+import { ElMessage } from '@utils/message'
 import { useTimeBlockStore } from '@stores/timeBlock'
 import * as authApi from '@api/auth'
 import * as syncApi from '@api/sync'
-import { getTimeBlockReminder, cancelTimeBlockReminder, setNoteAutoRemind, getPendingReminders } from '../services/reminder'
+import { getTimeBlockReminder, cancelTimeBlockReminder, getPendingReminders } from '../services/reminder'
 
 const router = useRouter()
 const store = useTimeBlockStore()
@@ -438,15 +439,9 @@ const settingItems = [
     icon: Tickets
   },
   {
-    key: 'reminder',
-    label: '提醒管理',
-    description: '时间块提醒、便签自动提醒设置',
-    icon: Bell
-  },
-  {
     key: 'general',
     label: '通用设置',
-    description: '默认视图、其他通用选项',
+    description: '默认视图、提醒管理',
     icon: Setting
   },
   {
@@ -670,7 +665,12 @@ async function cancelReminder(reminder) {
 // 开关便签自动提醒
 async function toggleNoteAutoRemind(noteId, enabled, advanceMinutes = 5) {
   try {
-    await setNoteAutoRemind(noteId, enabled, advanceMinutes)
+    // 通过 store.updateNote 同时更新数据库与前端响应式状态，
+    // 确保 switch 等 UI 元素能即时同步。
+    await store.updateNote(noteId, {
+      auto_remind: enabled ? 1 : 0,
+      default_advance_minutes: advanceMinutes
+    })
     ElMessage.success(enabled ? '已开启自动提醒' : '已关闭自动提醒')
     await loadReminders()
   } catch (err) {
@@ -904,18 +904,19 @@ function updateProfile() {
 /**
  * 导出数据（用于跨设备/用户分享）
  *
- * 导出包含便签和时间块的完整数据包
+ * 导出包含便签和时间块的完整数据包，格式与后端 /api/export 保持一致
  */
 function exportData() {
   const exportPackage = {
-    version: '1.0',
-    exportTime: new Date().toISOString(),
+    schemaVersion: '1.0',
     app: 'TimeBlock',
-    // 导出便签（包含颜色信息）
+    exportedAt: new Date().toISOString(),
+    // 导出便签（包含颜色、自动提醒设置）
     notes: store.notes.map(n => ({
       name: n.name,
-      color: n.color
-      // 不导出 ID，导入时重新生成
+      color: n.color,
+      autoRemind: n.auto_remind === 1,
+      defaultAdvanceMinutes: n.default_advance_minutes || 5
     })),
     // 导出时间块
     timeBlocks: store.blocks.map(b => ({
@@ -924,9 +925,7 @@ function exportData() {
       description: b.remark || b.description || '',
       startTime: `${b.date}T${b.startTime}:00`,
       endTime: `${b.date}T${b.endTime}:00`,
-      isCompleted: b.isCompleted ? 1 : 0,
-      date: b.date
-      // 不导出 ID，导入时重新生成
+      isCompleted: b.isCompleted
     }))
   }
 
@@ -935,7 +934,7 @@ function exportData() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `timeblock-share-${new Date().toISOString().split('T')[0]}.json`
+  a.download = `timeblock-export-${new Date().toISOString().split('T')[0]}.json`
   a.click()
   URL.revokeObjectURL(url)
   ElMessage.success(`导出成功：${store.notes.length} 个便签，${store.blocks.length} 个时间块`)
@@ -945,7 +944,7 @@ function exportData() {
  * 导入数据（从其他设备/用户分享的文件）
  *
  * 智能合并策略：
- * - 便签：按名称匹配，不存在则新建
+ * - 便签：按名称匹配，不存在则新建；已存在则更新颜色和自动提醒设置
  * - 时间块：生成新 ID，匹配便签后导入
  */
 async function handleImport(file) {
@@ -954,7 +953,7 @@ async function handleImport(file) {
     try {
       const importPackage = JSON.parse(e.target.result)
 
-      // 验证数据格式
+      // 验证数据格式（与后端 /api/import 保持一致）
       if (!importPackage.app || importPackage.app !== 'TimeBlock') {
         ElMessage.error('无效的 TimeBlock 数据文件')
         return
@@ -986,22 +985,42 @@ async function handleImport(file) {
       // 导入便签（按名称匹配）
       const noteNameToId = {} // 导入便签名称 -> 本地便签 ID
       let newNotesCount = 0
+      let updatedNotesCount = 0
 
       for (const importedNote of importedNotes) {
+        const name = typeof importedNote.name === 'string' ? importedNote.name.trim() : ''
+        if (!name) continue
+
+        const color = /^#[0-9A-Fa-f]{6}$/.test(importedNote.color)
+          ? importedNote.color
+          : '#909399'
+        const autoRemind = importedNote.autoRemind === true || importedNote.autoRemind === 1 || importedNote.autoRemind === '1'
+        const defaultAdvanceMinutes = Number.isFinite(importedNote.defaultAdvanceMinutes)
+          ? Math.max(1, Math.min(60, importedNote.defaultAdvanceMinutes))
+          : 5
+
         // 查找是否存在同名便签
-        const existingNote = store.notes.find(n => n.name === importedNote.name)
+        const existingNote = store.notes.find(n => n.name === name)
 
         if (existingNote) {
-          // 已存在同名便签，使用现有 ID
-          noteNameToId[importedNote.name] = existingNote.id
+          // 已存在同名便签：更新颜色和自动提醒设置，使用现有 ID
+          await store.updateNote(existingNote.id, {
+            color,
+            auto_remind: autoRemind,
+            default_advance_minutes: defaultAdvanceMinutes
+          })
+          noteNameToId[name] = existingNote.id
+          updatedNotesCount++
         } else {
           // 创建新便签
           const newNote = await store.createNote({
-            name: importedNote.name,
-            color: importedNote.color || '#909399'
+            name,
+            color,
+            auto_remind: autoRemind,
+            default_advance_minutes: defaultAdvanceMinutes
           })
           if (newNote) {
-            noteNameToId[importedNote.name] = newNote.id
+            noteNameToId[name] = newNote.id
             newNotesCount++
           }
         }
@@ -1009,28 +1028,52 @@ async function handleImport(file) {
 
       // 导入时间块（生成新 ID）
       let newBlocksCount = 0
+      let skippedBlocksCount = 0
       for (const importedBlock of importedBlocks) {
+        // 安全提取时间信息，兼容 ISO 字符串和其他格式
+        const startTimeValue = importedBlock.startTime
+        const endTimeValue = importedBlock.endTime
+        const startDate = startTimeValue ? new Date(startTimeValue) : null
+        const endDate = endTimeValue ? new Date(endTimeValue) : null
+
+        if (!startDate || isNaN(startDate.getTime()) || !endDate || isNaN(endDate.getTime())) {
+          skippedBlocksCount++
+          continue
+        }
+        if (endDate <= startDate) {
+          skippedBlocksCount++
+          continue
+        }
+
+        const dateStr = startDate.toISOString().split('T')[0]
+        const startTimeStr = startDate.toTimeString().slice(0, 5)
+        const endTimeStr = endDate.toTimeString().slice(0, 5)
+
         // 匹配便签 ID
-        const noteId = noteNameToId[importedBlock.noteName] || null
+        const noteName = typeof importedBlock.noteName === 'string' ? importedBlock.noteName.trim() : ''
+        const noteId = noteNameToId[noteName] || null
 
         // 创建新时间块
         const newBlock = await store.addBlock({
           noteId: noteId,
           title: importedBlock.title || '导入的时间块',
           remark: importedBlock.description || '',
-          startTime: importedBlock.startTime.split('T')[1]?.slice(0, 5) || '09:00',
-          endTime: importedBlock.endTime.split('T')[1]?.slice(0, 5) || '10:00',
-          date: importedBlock.date || importedBlock.startTime.split('T')[0] || new Date().toISOString().split('T')[0],
-          isCompleted: importedBlock.isCompleted === 1
+          startTime: startTimeStr,
+          endTime: endTimeStr,
+          date: dateStr,
+          isCompleted: importedBlock.isCompleted === true || importedBlock.isCompleted === 1 || importedBlock.isCompleted === '1'
         })
 
         if (newBlock) {
           newBlocksCount++
+        } else {
+          skippedBlocksCount++
         }
       }
 
-      ElMessage.success(`导入成功！新增 ${newNotesCount} 个便签，${newBlocksCount} 个时间块`)
-
+      ElMessage.success(
+        `导入成功！新增 ${newNotesCount} 个便签，更新 ${updatedNotesCount} 个便签，新增 ${newBlocksCount} 个时间块${skippedBlocksCount > 0 ? `，跳过 ${skippedBlocksCount} 个时间块` : ''}`
+      )
     } catch (err) {
       console.error('[Settings] 导入失败:', err)
       if (err instanceof SyntaxError) {

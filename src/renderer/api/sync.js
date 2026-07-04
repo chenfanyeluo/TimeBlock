@@ -12,6 +12,7 @@ import client from './client'
  * @param {Object} changes - 变更数据
  * @param {Object} changes.notes - 便签变更列表
  * @param {Object} changes.timeBlocks - 时间块变更列表
+ * @param {Object} changes.reminders - 提醒变更列表
  * @param {string} lastSyncAt - 上次同步时间
  * @param {string} deviceId - 设备标识
  * @returns {Promise<{ synced, syncId, serverTime }>}
@@ -34,7 +35,7 @@ export async function uploadChanges(changes, lastSyncAt = null, deviceId = 'web-
  * 从云端下载变更
  *
  * @param {string} lastSyncAt - 上次同步时间（可选，不传则下载全部）
- * @returns {Promise<{ serverTime, notes, timeBlocks }>}
+ * @returns {Promise<{ serverTime, notes, timeBlocks, reminders }>}
  */
 export async function downloadChanges(lastSyncAt = null) {
   const params = lastSyncAt ? { lastSyncAt } : {}
@@ -113,7 +114,8 @@ export async function fullSync(localData, lastSyncAt = null) {
     uploaded: uploadResult.synced,
     downloaded: {
       notes: downloadResult.notes?.length || 0,
-      timeBlocks: downloadResult.timeBlocks?.length || 0
+      timeBlocks: downloadResult.timeBlocks?.length || 0,
+      reminders: downloadResult.reminders?.length || 0
     },
     serverTime: downloadResult.serverTime,
     data: downloadResult

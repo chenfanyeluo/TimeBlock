@@ -39,17 +39,38 @@ const SCHEMA_SQL = [
   
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_email ON users(email)`,
   
-  // notes 便签表
-  `CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, name VARCHAR(100) NOT NULL, color VARCHAR(7) NOT NULL DEFAULT '#409eff', created_at DATETIME NOT NULL DEFAULT (datetime('now')), updated_at DATETIME NOT NULL DEFAULT (datetime('now')), deleted_at DATETIME NULL DEFAULT NULL, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`,
+  // notes 便签表（添加自动提醒配置字段）
+  `CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, name VARCHAR(100) NOT NULL, color VARCHAR(7) NOT NULL DEFAULT '#409eff', auto_remind INTEGER NOT NULL DEFAULT 0 CHECK(auto_remind IN (0, 1)), default_advance_minutes INTEGER NOT NULL DEFAULT 5, created_at DATETIME NOT NULL DEFAULT (datetime('now')), updated_at DATETIME NOT NULL DEFAULT (datetime('now')), deleted_at DATETIME NULL DEFAULT NULL, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`,
   
   `CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_auto_remind ON notes(auto_remind)`,
   
   // time_blocks 时间块表
   `CREATE TABLE IF NOT EXISTS time_blocks (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, note_id INTEGER NULL DEFAULT NULL, title VARCHAR(200) NOT NULL, description TEXT NULL DEFAULT NULL, start_time DATETIME NOT NULL, end_time DATETIME NOT NULL, is_completed INTEGER NOT NULL DEFAULT 0 CHECK(is_completed IN (0, 1)), created_at DATETIME NOT NULL DEFAULT (datetime('now')), updated_at DATETIME NOT NULL DEFAULT (datetime('now')), deleted_at DATETIME NULL DEFAULT NULL, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE SET NULL)`,
   
   `CREATE INDEX IF NOT EXISTS idx_timeblocks_user_id ON time_blocks(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_time_range ON time_blocks(user_id, start_time, end_time)`,
   
-  `CREATE INDEX IF NOT EXISTS idx_time_range ON time_blocks(user_id, start_time, end_time)`
+  // reminders 提醒通知表（支持时间块级别和便签级别提醒）
+  `CREATE TABLE IF NOT EXISTS reminders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, target_type VARCHAR(20) NOT NULL DEFAULT 'time_block' CHECK(target_type IN ('time_block', 'note')), target_id INTEGER NOT NULL, remind_at DATETIME NOT NULL, advance_minutes INTEGER NOT NULL DEFAULT 0, is_auto INTEGER NOT NULL DEFAULT 0 CHECK(is_auto IN (0, 1)), note_id INTEGER NULL DEFAULT NULL, title VARCHAR(200) NOT NULL, message TEXT NULL DEFAULT NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'triggered', 'dismissed', 'cancelled')), triggered_at DATETIME NULL DEFAULT NULL, dismissed_at DATETIME NULL DEFAULT NULL, created_at DATETIME NOT NULL DEFAULT (datetime('now')), updated_at DATETIME NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (target_id) REFERENCES time_blocks(id) ON DELETE CASCADE, FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE SET NULL)`,
+  
+  `CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_reminders_target ON reminders(target_type, target_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(user_id, remind_at, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_reminders_status ON reminders(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_reminders_note ON reminders(note_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_reminders_auto ON reminders(is_auto)`,
+  
+  // sync_logs 同步记录表
+  `CREATE TABLE IF NOT EXISTS sync_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, sync_type VARCHAR(20) NOT NULL DEFAULT 'manual', status VARCHAR(20) NOT NULL DEFAULT 'pending', records_synced INTEGER NOT NULL DEFAULT 0, started_at DATETIME NOT NULL DEFAULT (datetime('now')), completed_at DATETIME NULL DEFAULT NULL, error_message TEXT NULL DEFAULT NULL, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`,
+  
+  `CREATE INDEX IF NOT EXISTS idx_sync_logs_user ON sync_logs(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_sync_logs_time ON sync_logs(user_id, started_at)`,
+  
+  // statistics 统计汇总表
+  `CREATE TABLE IF NOT EXISTS statistics (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, stat_date DATE NOT NULL, note_id INTEGER NULL DEFAULT NULL, total_seconds INTEGER NOT NULL DEFAULT 0, block_count INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE SET NULL, UNIQUE(user_id, stat_date, note_id))`,
+  
+  `CREATE INDEX IF NOT EXISTS idx_stat_user_date ON statistics(user_id, stat_date)`
 ]
 
 /**
@@ -161,8 +182,15 @@ export const database = {
     try {
       if (isElectron) {
         // Electron: 通过 IPC 调用主进程（异步）
+        // IPC 返回格式为 { success: boolean, data?: any, error?: string }
         const result = await window.electronAPI?.dbQuery?.(sql, params)
-        return result || []
+        if (result && result.success) {
+          return result.data || []
+        }
+        if (result && result.error) {
+          throw new Error(result.error)
+        }
+        return []
       } else if (isCapacitor) {
         // Capacitor: 使用插件查询
         const result = await CapacitorSQLite.query({
@@ -214,7 +242,13 @@ export const database = {
         }
 
         console.log('[Database] Electron 写入成功:', sqlType, result)
-        return result || { changes: 0 }
+        if (result && result.success) {
+          return result.data || { changes: 0 }
+        }
+        if (result && result.error) {
+          throw new Error(result.error)
+        }
+        return { changes: 0 }
       } else if (isCapacitor) {
         // Capacitor: 使用插件执行（自动持久化）
         console.log('[Database] Capacitor 执行写入:', sql.trim().substring(0, 60))
@@ -387,8 +421,13 @@ export const database = {
         return true
       } else if (isElectron) {
         const result = await window.electronAPI?.dbQuery?.('SELECT COUNT(*) as count FROM users;')
-        console.log('[Database] Electron 数据库验证成功')
-        return true
+        if (result && result.success) {
+          const count = result.data?.[0]?.count || 0
+          console.log('[Database] Electron 数据库验证成功，用户数:', count)
+          return true
+        }
+        console.error('[Database] Electron 数据库验证失败:', result?.error)
+        return false
       }
       
       return false

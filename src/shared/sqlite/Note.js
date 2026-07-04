@@ -25,12 +25,14 @@ class NoteModel {
    */
   create(data) {
     const result = exec(
-      `INSERT INTO notes (user_id, name, color)
-       VALUES (?, ?, ?);`,
+      `INSERT INTO notes (user_id, name, color, auto_remind, default_advance_minutes)
+       VALUES (?, ?, ?, ?, ?);`,
       [
         data.user_id,
         data.name,
-        data.color || '#409eff'
+        data.color || '#409eff',
+        data.auto_remind !== undefined ? (data.auto_remind ? 1 : 0) : 0,
+        data.default_advance_minutes !== undefined ? data.default_advance_minutes : 5
       ]
     )
 
@@ -45,7 +47,7 @@ class NoteModel {
    */
   findById(id) {
     return get(
-      `SELECT id, user_id, name, color, created_at, updated_at
+      `SELECT id, user_id, name, color, auto_remind, default_advance_minutes, created_at, updated_at
        FROM notes
        WHERE id = ? AND deleted_at IS NULL;`,
       [id]
@@ -60,7 +62,7 @@ class NoteModel {
    */
   findByUserId(userId) {
     return all(
-      `SELECT id, user_id, name, color, created_at, updated_at
+      `SELECT id, user_id, name, color, auto_remind, default_advance_minutes, created_at, updated_at
        FROM notes
        WHERE user_id = ? AND deleted_at IS NULL
        ORDER BY created_at ASC, id ASC;`,
@@ -86,6 +88,14 @@ class NoteModel {
     if (data.color !== undefined) {
       fields.push('color = ?')
       values.push(data.color)
+    }
+    if (data.auto_remind !== undefined) {
+      fields.push('auto_remind = ?')
+      values.push(data.auto_remind ? 1 : 0)
+    }
+    if (data.default_advance_minutes !== undefined) {
+      fields.push('default_advance_minutes = ?')
+      values.push(data.default_advance_minutes)
     }
 
     if (fields.length === 0) return this.findById(id)

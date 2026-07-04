@@ -55,11 +55,17 @@ const User = sequelize.define('User', {
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',
+  paranoid: true,
+  deletedAt: 'deleted_at',
   indexes: [
     {
       name: 'idx_email',
       unique: true,
       fields: ['email']
+    },
+    {
+      name: 'idx_users_deleted',
+      fields: ['deleted_at']
     }
   ]
 })

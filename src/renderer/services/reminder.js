@@ -3,13 +3,14 @@
  *
  * 功能：
  * - 定时检查到期提醒（每分钟）
- * - 发送浏览器通知
+ * - 发送系统/浏览器通知（Electron 走主进程原生通知）
  * - 提醒触发后播放声音（可选）
  * - 支持三端（Web/Electron/Capacitor）
  */
 
 import { platformInfo, database } from '@shared/platform'
 import { ElNotification } from 'element-plus'
+import dayjs from 'dayjs'
 
 // 提醒检查间隔（毫秒）
 const CHECK_INTERVAL = 60 * 1000 // 1分钟
@@ -93,9 +94,18 @@ async function checkReminders() {
 
   try {
     // 查询需要触发的提醒（userId = 1，默认单用户）
+    // 使用 ISO 字符串参数化比较，避免与 SQLite datetime('now') 格式不一致导致字典序比较错误
+    const nowIso = dayjs().toISOString()
     const dueReminders = await database.query(
-      `SELECT * FROM reminders WHERE user_id = 1 AND status = 'pending' AND remind_at <= datetime('now') ORDER BY remind_at ASC;`
+      `SELECT * FROM reminders WHERE user_id = 1 AND status = 'pending' AND remind_at <= ? ORDER BY remind_at ASC;`,
+      [nowIso]
     )
+
+    console.log('[Reminder] 检查到期提醒:', {
+      nowIso,
+      pendingCount: dueReminders.length,
+      firstRemindAt: dueReminders.length > 0 ? dueReminders[0].remind_at : null
+    })
 
     if (dueReminders.length === 0) {
       return
@@ -121,7 +131,7 @@ async function checkReminders() {
 async function triggerReminder(reminder) {
   try {
     // 发送通知
-    sendNotification(reminder.title, reminder.message)
+    await sendNotification(reminder.title, reminder.message)
 
     // 播放音效
     if (reminderAudio) {
@@ -146,35 +156,58 @@ async function triggerReminder(reminder) {
 }
 
 /**
- * 发送浏览器通知
+ * 发送通知
  *
  * @param {string} title 通知标题
  * @param {string} body 通知内容
  */
-function sendNotification(title, body) {
-  // 浏览器通知
-  if (notificationPermissionGranted && 'Notification' in window) {
-    const notification = new Notification(title, {
-      body: body || '',
-      icon: '/assets/icon.png',
-      tag: 'timeblock-reminder',
-      requireInteraction: true // 保持通知直到用户点击
-    })
+async function sendNotification(title, body) {
+  let systemNotified = false
 
-    notification.onclick = () => {
-      window.focus()
-      notification.close()
+  // Electron：通过主进程发送原生系统通知
+  if (platformInfo.isElectron && window.electronAPI?.showNotification) {
+    try {
+      const result = await window.electronAPI.showNotification({
+        title: title || 'TimeBlock',
+        body: body || '',
+        icon: '/assets/icon.png'
+      })
+      systemNotified = result && result.success
+    } catch (err) {
+      console.error('[Reminder] Electron 通知发送失败:', err)
     }
   }
 
-  // Element Plus 内部通知（作为备用）
-  ElNotification({
-    title: title,
-    message: body || '',
-    type: 'warning',
-    duration: 0, // 不自动关闭
-    position: 'top-right'
-  })
+  // Capacitor / Web：使用浏览器通知
+  if (!systemNotified && notificationPermissionGranted && 'Notification' in window) {
+    try {
+      const notification = new Notification(title || 'TimeBlock', {
+        body: body || '',
+        icon: '/assets/icon.png',
+        tag: 'timeblock-reminder',
+        requireInteraction: true // 保持通知直到用户点击
+      })
+
+      notification.onclick = () => {
+        window.focus()
+        notification.close()
+      }
+      systemNotified = true
+    } catch (err) {
+      console.error('[Reminder] 浏览器通知发送失败:', err)
+    }
+  }
+
+  // 若系统/浏览器通知均未成功，使用 Element Plus 应用内通知作为 fallback
+  if (!systemNotified) {
+    ElNotification({
+      title: title || 'TimeBlock',
+      message: body || '',
+      type: 'warning',
+      duration: 0, // 不自动关闭
+      position: 'top-right'
+    })
+  }
 }
 
 /**
@@ -196,12 +229,29 @@ export async function createTimeBlockReminder(timeBlock, advanceMinutes = 5, isA
     return null
   }
 
-  // 计算提醒时间
-  const startTime = new Date(`${timeBlock.date}T${timeBlock.startTime}:00`)
-  const remindAt = new Date(startTime.getTime() - advanceMinutes * 60 * 1000)
+  // 确保 advanceMinutes 为数字
+  const minutes = Number(advanceMinutes) || 5
+
+  // 使用 dayjs 明确按本地时间解析，避免不同环境对 ISO 字符串解析行为不一致
+  const startTime = dayjs(`${timeBlock.date} ${timeBlock.startTime}`, 'YYYY-MM-DD HH:mm')
+  if (!startTime.isValid()) {
+    console.error('[Reminder] 时间块开始时间解析失败:', timeBlock.date, timeBlock.startTime)
+    return null
+  }
+
+  const remindAt = startTime.subtract(minutes, 'minute')
+
+  console.log('[Reminder] 计算提醒时间:', {
+    date: timeBlock.date,
+    startTime: timeBlock.startTime,
+    advanceMinutes: minutes,
+    remindAtLocal: remindAt.format('YYYY-MM-DD HH:mm:ss'),
+    remindAtIso: remindAt.toISOString(),
+    nowIso: dayjs().toISOString()
+  })
 
   // 如果提醒时间已过去，不创建
-  if (remindAt <= new Date()) {
+  if (remindAt.isSameOrBefore(dayjs())) {
     console.log('[Reminder] 提醒时间已过去，不创建')
     return null
   }
@@ -213,11 +263,11 @@ export async function createTimeBlockReminder(timeBlock, advanceMinutes = 5, isA
       [
         timeBlock.id,
         remindAt.toISOString(),
-        advanceMinutes,
+        minutes,
         isAuto ? 1 : 0,
         noteId,
-        `即将开始: ${timeBlock.title}`,
-        `时间块 "${timeBlock.title}" 将在 ${advanceMinutes} 分钟后开始`
+        `提醒您开始 ${timeBlock.title}`,
+        `规划时间 "${timeBlock.title}" 将在 ${minutes} 分钟后开始`
       ]
     )
 
@@ -262,7 +312,7 @@ export async function cancelTimeBlockReminder(timeBlockId, cancelNoteAuto = fals
       )
       // 取消该便签所有未来的自动提醒
       await database.run(
-        `UPDATE reminders SET status = 'cancelled', updated_at = datetime('now') WHERE note_id = ? AND is_auto = 1 AND status = 'pending;`,
+        `UPDATE reminders SET status = 'cancelled', updated_at = datetime('now') WHERE note_id = ? AND is_auto = 1 AND status = 'pending';`,
         [noteId]
       )
       console.log('[Reminder] 便签自动提醒已关闭:', noteId)
@@ -390,6 +440,7 @@ export async function getPendingReminders() {
   }
 
   if (!database.isReady()) {
+    console.warn('[Reminder] 数据库未就绪,无法获取提醒列表')
     return []
   }
 
@@ -400,6 +451,11 @@ export async function getPendingReminders() {
     return reminders
   } catch (err) {
     console.error('[Reminder] 获取提醒列表失败:', err)
+    // 如果是表不存在的错误,抛出错误让上层处理
+    if (err.message && err.message.includes('no such table')) {
+      throw new Error('提醒表不存在,请重新初始化数据库')
+    }
+    // 其他错误返回空数组
     return []
   }
 }
@@ -429,6 +485,59 @@ export async function getTriggeredReminders() {
   }
 }
 
+/**
+ * 时间块更新后同步其提醒
+ *
+ * 当时间块的开始时间/日期发生变化时，取消旧的 pending 提醒并重新创建。
+ * 若不存在 pending 提醒，则不自动新建，尊重手动提醒流程。
+ *
+ * @param {Object} timeBlock 更新后的时间块（前端格式）
+ */
+export async function syncReminderAfterTimeBlockUpdate(timeBlock) {
+  if (!platformInfo.isElectron && !platformInfo.isCapacitor) {
+    return
+  }
+
+  if (!database.isReady()) {
+    console.warn('[Reminder] 数据库未就绪，无法同步提醒')
+    return
+  }
+
+  try {
+    // 查询该时间块最新的 pending 提醒
+    const existing = await database.query(
+      `SELECT * FROM reminders WHERE target_type = 'time_block' AND target_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1;`,
+      [timeBlock.id]
+    )
+
+    if (existing.length === 0) {
+      return
+    }
+
+    const reminder = existing[0]
+
+    // 取消旧提醒
+    await cancelTimeBlockReminder(timeBlock.id)
+    console.log('[Reminder] 时间块更新，已取消旧提醒:', timeBlock.id)
+
+    // 使用原参数重新创建提醒
+    const result = await createTimeBlockReminder(
+      timeBlock,
+      reminder.advance_minutes,
+      reminder.is_auto === 1,
+      reminder.note_id
+    )
+
+    if (result) {
+      console.log('[Reminder] 时间块更新，已重建提醒:', timeBlock.id)
+    } else {
+      console.log('[Reminder] 时间块更新，新提醒时间已过去，未重建:', timeBlock.id)
+    }
+  } catch (err) {
+    console.error('[Reminder] 同步时间块提醒失败:', err)
+  }
+}
+
 export default {
   initReminderService,
   stopReminderService,
@@ -439,5 +548,6 @@ export default {
   getTriggeredReminders,
   checkNoteAutoRemind,
   setNoteAutoRemind,
-  getTimeBlockReminder
+  getTimeBlockReminder,
+  syncReminderAfterTimeBlockUpdate
 }

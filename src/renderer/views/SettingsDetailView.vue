@@ -101,12 +101,21 @@
       <div v-if="currentKey === 'notes'" class="setting-section">
         <div class="notes-list">
           <div
-            v-for="note in notes"
+            v-for="note in localNotes"
             :key="note.id"
             class="note-item"
           >
-            <el-color-picker v-model="note.color" size="small" />
-            <el-input v-model="note.name" size="small" class="note-name-input" />
+            <el-color-picker
+              v-model="note.color"
+              size="small"
+              @change="(val) => updateNoteInfo(note.id, { color: val })"
+            />
+            <el-input
+              v-model="note.name"
+              size="small"
+              class="note-name-input"
+              @blur="(e) => updateNoteInfo(note.id, { name: e.target.value })"
+            />
             <el-button
               type="danger"
               size="small"
@@ -121,74 +130,6 @@
         </div>
       </div>
 
-      <!-- 提醒管理 -->
-      <div v-if="currentKey === 'reminder'" class="setting-section" v-loading="loadingReminders">
-        <!-- 时间块提醒 -->
-        <div class="reminder-card">
-          <h4 class="section-label">时间块提醒</h4>
-          <div v-if="reminderTimeBlocks.length === 0" class="empty-hint">
-            暂无设置了提醒的时间块
-          </div>
-          <div v-else class="reminder-list">
-            <div
-              v-for="reminder in reminderTimeBlocks"
-              :key="reminder.id"
-              class="reminder-item"
-            >
-              <div class="reminder-info">
-                <span class="reminder-title">{{ reminder.title }}</span>
-                <span class="reminder-time">{{ new Date(reminder.remind_at).toLocaleString() }}</span>
-              </div>
-              <el-button
-                type="danger"
-                size="small"
-                @click="cancelReminder(reminder)"
-              >
-                取消
-              </el-button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 便签自动提醒 -->
-        <div class="reminder-card">
-          <h4 class="section-label">便签自动提醒</h4>
-          <div v-if="notes.length === 0" class="empty-hint">
-            暂无便签
-          </div>
-          <div v-else class="auto-remind-list">
-            <div
-              v-for="note in notes"
-              :key="note.id"
-              class="auto-remind-item"
-            >
-              <div class="note-info">
-                <el-color-picker v-model="note.color" size="small" disabled />
-                <span class="note-name">{{ note.name }}</span>
-              </div>
-              <div class="note-remind-controls">
-                <el-switch
-                  :model-value="note.auto_remind === 1"
-                  @change="(val) => toggleNoteAutoRemind(note.id, val, note.default_advance_minutes || 5)"
-                  inline-prompt
-                  active-text="开"
-                  inactive-text="关"
-                />
-                <el-input-number
-                  v-if="note.auto_remind === 1"
-                  :model-value="note.default_advance_minutes || 5"
-                  @change="(val) => toggleNoteAutoRemind(note.id, true, val)"
-                  :min="1"
-                  :max="60"
-                  size="small"
-                  style="width: 80px"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- 通用设置 -->
       <div v-if="currentKey === 'general'" class="setting-section">
         <div class="settings-card">
@@ -198,6 +139,75 @@
               <el-radio-button label="record">记录</el-radio-button>
               <el-radio-button label="stats">统计</el-radio-button>
             </el-radio-group>
+          </div>
+        </div>
+
+        <!-- 提醒管理区域 -->
+        <div class="reminder-section" v-loading="loadingReminders">
+          <!-- 时间块提醒 -->
+          <div class="reminder-card">
+            <h4 class="section-label">时间块提醒</h4>
+            <div v-if="reminderTimeBlocks.length === 0" class="empty-hint">
+              暂无设置了提醒的时间块
+            </div>
+            <div v-else class="reminder-list">
+              <div
+                v-for="reminder in reminderTimeBlocks"
+                :key="reminder.id"
+                class="reminder-item"
+              >
+                <div class="reminder-info">
+                  <span class="reminder-title">{{ reminder.title }}</span>
+                  <span class="reminder-time">{{ new Date(reminder.remind_at).toLocaleString() }}</span>
+                </div>
+                <el-button
+                  type="danger"
+                  size="small"
+                  @click="cancelReminder(reminder)"
+                >
+                  取消
+                </el-button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 便签自动提醒 -->
+          <div class="reminder-card">
+            <h4 class="section-label">便签自动提醒</h4>
+            <div v-if="localNotes.length === 0" class="empty-hint">
+              暂无便签
+            </div>
+            <div v-else class="auto-remind-list">
+              <div
+                v-for="note in localNotes"
+                :key="note.id"
+                class="auto-remind-item"
+              >
+                <div class="note-info">
+                  <el-color-picker v-model="note.color" size="small" disabled />
+                  <span class="note-name">{{ note.name }}</span>
+                </div>
+                <div class="note-remind-controls">
+                  <el-input-number
+                    v-if="note.auto_remind === 1"
+                    :model-value="note.default_advance_minutes || 5"
+                    @change="(val) => toggleNoteAutoRemind(note.id, true, val)"
+                    :min="1"
+                    :max="60"
+                    size="small"
+                    style="width: 80px"
+                  />
+                  <span v-if="note.auto_remind === 1" class="advance-hint">分钟前提醒</span>
+                  <el-switch
+                    :model-value="note.auto_remind === 1"
+                    @change="(val) => toggleNoteAutoRemind(note.id, val, note.default_advance_minutes || 5)"
+                    inline-prompt
+                    active-text="开"
+                    inactive-text="关"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -287,11 +297,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, Delete, Plus, Download, Upload } from '@element-plus/icons-vue'
-import { getTimeBlockReminder, cancelTimeBlockReminder, setNoteAutoRemind, getPendingReminders } from '../services/reminder'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { getTimeBlockReminder, cancelTimeBlockReminder, getPendingReminders } from '../services/reminder'
+import { ElMessageBox } from 'element-plus'
+import { ElMessage } from '@utils/message'
 import { useTimeBlockStore } from '@stores/timeBlock'
 
 const router = useRouter()
@@ -303,7 +314,6 @@ const settingItems = {
   sync: { title: '数据与同步', key: 'sync' },
   account: { title: '账号管理', key: 'account' },
   notes: { title: '便签管理', key: 'notes' },
-  reminder: { title: '提醒管理', key: 'reminder' },
   general: { title: '通用设置', key: 'general' },
   appearance: { title: '外观设置', key: 'appearance' },
   data: { title: '数据管理', key: 'data' }
@@ -410,7 +420,22 @@ async function handleAnimationChange(val) {
   ElMessage.success(val ? 'UI 动画已开启' : 'UI 动画已关闭（性能模式）')
 }
 
-const notes = computed(() => store.notes)
+// 便签数据：使用 watch 确保响应式更新
+const localNotes = ref([])
+
+// 监听 store.notes 的变化，确保界面及时同步
+const stopWatchNotes = watch(
+  () => store.notes,
+  (newNotes) => {
+    localNotes.value = [...newNotes]  // 创建新数组触发响应式更新
+  },
+  { immediate: true, deep: true }
+)
+
+// 组件卸载时停止监听
+onUnmounted(() => {
+  stopWatchNotes()
+})
 
 // 提醒管理相关状态
 const reminderTimeBlocks = ref([])
@@ -424,6 +449,7 @@ async function loadReminders() {
     reminderTimeBlocks.value = pendingReminders.filter(r => r.target_type === 'time_block')
   } catch (err) {
     console.error('[SettingsDetailView] 加载提醒数据失败:', err)
+    ElMessage.error('加载提醒数据失败: ' + (err.message || '未知错误'))
   } finally {
     loadingReminders.value = false
   }
@@ -444,7 +470,10 @@ async function cancelReminder(reminder) {
 // 开关便签自动提醒
 async function toggleNoteAutoRemind(noteId, enabled, advanceMinutes = 5) {
   try {
-    await setNoteAutoRemind(noteId, enabled, advanceMinutes)
+    await store.updateNote(noteId, {
+      auto_remind: enabled ? 1 : 0,
+      default_advance_minutes: advanceMinutes
+    })
     ElMessage.success(enabled ? '已开启自动提醒' : '已关闭自动提醒')
   } catch (err) {
     console.error('[SettingsDetailView] 设置便签自动提醒失败:', err)
@@ -488,20 +517,20 @@ function updateProfile() {
   ElMessage.success('资料已更新')
 }
 
-function addNote() {
-  const id = `note-${Date.now()}`
-  store.notes.push({
-    id,
+async function addNote() {
+  await store.createNote({
     name: '新便签',
     color: '#909399'
   })
 }
 
-function deleteNote(id) {
-  const idx = store.notes.findIndex(n => n.id === id)
-  if (idx !== -1) {
-    store.notes.splice(idx, 1)
-  }
+async function deleteNote(id) {
+  await store.deleteNote(id)
+}
+
+// 更新便签信息（名称或颜色）
+async function updateNoteInfo(noteId, updates) {
+  await store.updateNote(noteId, updates)
 }
 
 function exportData() {
@@ -835,6 +864,11 @@ function clearAllData() {
   color: var(--text-secondary);
 }
 
+// ---- 提醒管理区域样式 ----
+.reminder-section {
+  margin-top: 16px;
+}
+
 // ---- 提醒管理样式 ----
 .reminder-card {
   background: var(--bg-secondary);
@@ -928,6 +962,12 @@ function clearAllData() {
         display: flex;
         align-items: center;
         gap: 8px;
+
+        .advance-hint {
+          font-size: 12px;
+          color: var(--text-secondary);
+          white-space: nowrap;
+        }
       }
     }
   }

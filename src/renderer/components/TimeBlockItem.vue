@@ -140,15 +140,85 @@ const isCompact = computed(() => isComputedHeight.value < 35)
 // 显示的时间（拖拽/resize 过程中显示预览值）
 const displayStartTime = computed(() => {
   if (!isDragging.value && !isResizing.value) return props.block.startTime
-  return minutesToTime(Math.max(0, Math.min(1380, snapshotStartMin.value + Math.round(dragOffsetY.value / props.hourHeight * 60))))
+
+  if (isResizing.value) {
+    // resize 过程中开始时间不变
+    return props.block.startTime
+  }
+
+  // 拖动过程中：与 onDragEnd 保持一致的逻辑
+  const originalDuration = snapshotEndMin.value - snapshotStartMin.value
+  const deltaMinutes = Math.round(dragOffsetY.value / props.hourHeight * 60)
+  const granularity = store.timeGranularity || 15
+
+  const rawNewStart = snapshotStartMin.value + deltaMinutes
+  const rawNewEnd = rawNewStart + originalDuration
+
+  let boundedStart = Math.max(0, rawNewStart)
+  let boundedEnd = Math.min(1440, rawNewEnd)
+
+  if (boundedEnd - boundedStart < granularity) {
+    if (rawNewStart < granularity) {
+      boundedStart = 0
+      boundedEnd = originalDuration
+    } else {
+      boundedEnd = 1440
+      boundedStart = 1440 - originalDuration
+    }
+  }
+
+  let previewStart = snapToGrid(boundedStart)
+  let previewEnd = snapToGrid(boundedEnd)
+
+  if (previewEnd - previewStart < granularity) {
+    previewEnd = snapToGrid(previewStart + granularity)
+    if (previewEnd > 1440) previewEnd = 1440
+  }
+
+  return minutesToTime(previewStart)
 })
 
 const displayEndTime = computed(() => {
   if (!isDragging.value && !isResizing.value) return props.block.endTime
+
   if (isResizing.value) {
-    return minutesToTime(Math.max(snapshotStartMin.value + 15, Math.min(1440, snapshotEndMin.value + Math.round(resizeDeltaY.value / props.hourHeight * 60))))
+    // resize 过程中：只改变结束时间，截断到24:00
+    const deltaMinutes = Math.round(resizeDeltaY.value / props.hourHeight * 60)
+    const previewEnd = snapshotEndMin.value + deltaMinutes
+    const minEnd = snapshotStartMin.value + (store.timeGranularity || 15)
+    return minutesToTime(Math.max(minEnd, Math.min(1440, previewEnd)))
   }
-  return minutesToTime(Math.max(15, Math.min(1440, snapshotEndMin.value + Math.round(dragOffsetY.value / props.hourHeight * 60))))
+
+  // 拖动过程中：与 displayStartTime 保持一致的逻辑
+  const originalDuration = snapshotEndMin.value - snapshotStartMin.value
+  const deltaMinutes = Math.round(dragOffsetY.value / props.hourHeight * 60)
+  const granularity = store.timeGranularity || 15
+
+  const rawNewStart = snapshotStartMin.value + deltaMinutes
+  const rawNewEnd = rawNewStart + originalDuration
+
+  let boundedStart = Math.max(0, rawNewStart)
+  let boundedEnd = Math.min(1440, rawNewEnd)
+
+  if (boundedEnd - boundedStart < granularity) {
+    if (rawNewStart < granularity) {
+      boundedStart = 0
+      boundedEnd = originalDuration
+    } else {
+      boundedEnd = 1440
+      boundedStart = 1440 - originalDuration
+    }
+  }
+
+  let previewStart = snapToGrid(boundedStart)
+  let previewEnd = snapToGrid(boundedEnd)
+
+  if (previewEnd - previewStart < granularity) {
+    previewEnd = snapToGrid(previewStart + granularity)
+    if (previewEnd > 1440) previewEnd = 1440
+  }
+
+  return minutesToTime(previewEnd)
 })
 
 // 拖拽时 tooltip 显示的时间
@@ -217,13 +287,18 @@ function timeToMinutes(time) {
 }
 
 function minutesToTime(minutes) {
+  // 特殊处理：1440分钟 = 24:00（允许结束时间为24:00）
+  if (minutes >= 1440) return '24:00'
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  return `${String(Math.min(23, h)).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-function snapToGrid(minutes) {
-  return Math.round(minutes / 15) * 15
+function snapToGrid(minutes, maxMinutes = 1440) {
+  // 先限制在有效范围内，再对齐网格（最大1440分钟=24:00）
+  const granularity = store.timeGranularity || 15
+  const clamped = Math.max(0, Math.min(maxMinutes, minutes))
+  return Math.round(clamped / granularity) * granularity
 }
 
 // ---- 统一拖拽（移动位置 / 拖到储备栏回收）----
@@ -321,10 +396,42 @@ function onDragEnd(e) {
     return
   }
 
+
   // 正常移动：松开鼠标时一次性提交最终结果
   const deltaMinutes = Math.round((dragOffsetY.value / props.hourHeight) * 60)
-  const newStart = snapToGrid(snapshotStartMin.value + deltaMinutes)
-  const newEnd = snapToGrid(snapshotEndMin.value + deltaMinutes)
+  const originalDuration = snapshotEndMin.value - snapshotStartMin.value // 保持原始时长
+  const granularity = store.timeGranularity || 15
+
+  // 步骤1：计算原始意图位置（不对齐网格）
+  const rawNewStart = snapshotStartMin.value + deltaMinutes
+  const rawNewEnd = rawNewStart + originalDuration
+
+  // 步骤2：先截断到有效边界
+  let boundedStart = Math.max(0, rawNewStart)
+  let boundedEnd = Math.min(1440, rawNewEnd)
+
+  // 步骤3：如果截断后时长太小，整体移动到边界（保持时长）
+  if (boundedEnd - boundedStart < granularity) {
+    if (rawNewStart < granularity) {
+      // 靠近上边界：固定在顶部，保持时长
+      boundedStart = 0
+      boundedEnd = originalDuration
+    } else {
+      // 靠近下边界：固定在底部，保持时长
+      boundedEnd = 1440
+      boundedStart = 1440 - originalDuration
+    }
+  }
+
+  // 步骤4：对齐网格
+  let newStart = snapToGrid(boundedStart)
+  let newEnd = snapToGrid(boundedEnd)
+
+  // 步骤5：确保最小时长（只扩大结束时间）
+  if (newEnd - newStart < granularity) {
+    newEnd = snapToGrid(newStart + granularity)
+    if (newEnd > 1440) newEnd = 1440
+  }
 
   // 重置拖拽状态
   isDragging.value = false
@@ -334,8 +441,8 @@ function onDragEnd(e) {
   // 只在位置确实改变时才 emit
   if (newStart !== timeToMinutes(props.block.startTime)) {
     emit('update', {
-      startTime: minutesToTime(Math.max(0, Math.min(1380, newStart))),
-      endTime: minutesToTime(Math.max(15, Math.min(1440, newEnd)))
+      startTime: minutesToTime(newStart),
+      endTime: minutesToTime(newEnd)
     })
   }
 
@@ -361,9 +468,19 @@ function startResize(e) {
 function onResizeMove(e) {
   if (!isResizing.value) return
   let delta = e.clientY - _resizeStartClientY
-  // 限制不能拖到开始时间之上（最小保留15分钟）
+
+  // 限制最小值：不能拖到开始时间之上（最小保留15分钟）
   const minDelta = ((snapshotStartMin.value + 15) - snapshotEndMin.value) / 60 * props.hourHeight
-  resizeDeltaY.value = Math.max(delta, minDelta)
+
+  // 计算最大值：结束时间恰好为1440分钟（24:00）时的delta
+  const maxEndMinutes = 1440
+  const maxDeltaMinutes = maxEndMinutes - snapshotEndMin.value
+  const maxDelta = maxDeltaMinutes / 60 * props.hourHeight
+
+  // 应用限制：
+  // - 最小值限制：保持最小时长15分钟
+  // - 最大值限制：如果超过最大值，固定在最大值（让时间块底部固定在24:00）
+  resizeDeltaY.value = Math.max(minDelta, Math.min(delta, maxDelta))
 }
 
 function onResizeEnd() {

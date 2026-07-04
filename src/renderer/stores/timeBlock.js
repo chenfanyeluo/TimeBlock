@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import dayjs from 'dayjs'
 import { storage } from '@shared/platform'
 import { platformInfo, database } from '@shared/platform'
-import { createTimeBlockReminder, cancelTimeBlockReminder } from '../services/reminder'
+import { createTimeBlockReminder, cancelTimeBlockReminder, syncReminderAfterTimeBlockUpdate } from '../services/reminder'
 
 /**
  * 检查是否支持数据库（Electron 或 Capacitor）
@@ -190,12 +190,12 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       // 不支持数据库的平台（Web），使用默认便签
       console.log('[Store] 平台不支持数据库，使用默认便签')
       notes.value = [
-        { id: 1, name: '工作', color: '#409eff' },
-        { id: 2, name: '学习', color: '#67c23a' },
-        { id: 3, name: '休息', color: '#e6a23c' },
-        { id: 4, name: '运动', color: '#f56c6c' },
-        { id: 5, name: '生活', color: '#9254de' },
-        { id: 6, name: '其他', color: '#909399' }
+        { id: 1, name: '工作', color: '#409eff', auto_remind: 0, default_advance_minutes: 5 },
+        { id: 2, name: '学习', color: '#67c23a', auto_remind: 0, default_advance_minutes: 5 },
+        { id: 3, name: '休息', color: '#e6a23c', auto_remind: 0, default_advance_minutes: 5 },
+        { id: 4, name: '运动', color: '#f56c6c', auto_remind: 0, default_advance_minutes: 5 },
+        { id: 5, name: '生活', color: '#9254de', auto_remind: 0, default_advance_minutes: 5 },
+        { id: 6, name: '其他', color: '#909399', auto_remind: 0, default_advance_minutes: 5 }
       ]
       return
     }
@@ -233,7 +233,9 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         notes.value = result.map(note => ({
           id: note.id,  // ⚠️ 确保使用数字 ID
           name: note.name,
-          color: note.color
+          color: note.color,
+          auto_remind: Number(note.auto_remind || 0),  // 是否开启自动提醒
+          default_advance_minutes: Number(note.default_advance_minutes || 5)  // 默认提前提醒分钟数
         }))
         console.log('[Store] ✅ Capacitor 加载便签成功:', notes.value.length, notes.value)
       } else if (isElectron()) {
@@ -248,7 +250,9 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
           notes.value = result.data.map(note => ({
             id: note.id,  // ⚠️ 确保使用数字 ID
             name: note.name,
-            color: note.color
+            color: note.color,
+            auto_remind: Number(note.auto_remind || 0),  // 是否开启自动提醒
+            default_advance_minutes: Number(note.default_advance_minutes || 5)  // 默认提前提醒分钟数
           }))
           console.log('[Store] Electron 加载便签:', notes.value.length)
         }
@@ -257,12 +261,12 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       console.error('[Store] 加载便签失败:', err)
       // 失败时使用默认便签（使用数字 ID）
       notes.value = [
-        { id: 1, name: '工作', color: '#409eff' },
-        { id: 2, name: '学习', color: '#67c23a' },
-        { id: 3, name: '休息', color: '#e6a23c' },
-        { id: 4, name: '运动', color: '#f56c6c' },
-        { id: 5, name: '生活', color: '#9254de' },
-        { id: 6, name: '其他', color: '#909399' }
+        { id: 1, name: '工作', color: '#409eff', auto_remind: 0, default_advance_minutes: 5 },
+        { id: 2, name: '学习', color: '#67c23a', auto_remind: 0, default_advance_minutes: 5 },
+        { id: 3, name: '休息', color: '#e6a23c', auto_remind: 0, default_advance_minutes: 5 },
+        { id: 4, name: '运动', color: '#f56c6c', auto_remind: 0, default_advance_minutes: 5 },
+        { id: 5, name: '生活', color: '#9254de', auto_remind: 0, default_advance_minutes: 5 },
+        { id: 6, name: '其他', color: '#909399', auto_remind: 0, default_advance_minutes: 5 }
       ]
     }
   }
@@ -290,7 +294,13 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         }
         // 重新加载
         const result = await database.query('SELECT * FROM notes WHERE user_id = 1 AND deleted_at IS NULL')
-        notes.value = result.map(n => ({ id: n.id, name: n.name, color: n.color }))
+        notes.value = result.map(n => ({
+          id: n.id,
+          name: n.name,
+          color: n.color,
+          auto_remind: Number(n.auto_remind || 0),
+          default_advance_minutes: Number(n.default_advance_minutes || 5)
+        }))
         console.log('[Store] ✅ 初始化默认便签成功:', notes.value.length)
       } else if (isElectron()) {
         for (const note of defaultNotes) {
@@ -298,16 +308,32 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         }
         const result = await window.electronAPI.getAllNotes()
         if (result.success && result.data) {
-          notes.value = result.data.map(n => ({ id: n.id, name: n.name, color: n.color }))
-        }
+            notes.value = result.data.map(n => ({
+              id: n.id,
+              name: n.name,
+              color: n.color,
+              auto_remind: Number(n.auto_remind || 0),
+              default_advance_minutes: Number(n.default_advance_minutes || 5)
+            }))
+          }
         console.log('[Store] ✅ Electron 初始化默认便签成功:', notes.value.length)
       } else {
         // Web端直接使用默认值（不持久化）
-        notes.value = defaultNotes.map((n, i) => ({ id: i + 1, ...n }))
+        notes.value = defaultNotes.map((n, i) => ({
+          id: i + 1,
+          ...n,
+          auto_remind: 0,  // Web端默认不开启自动提醒
+          default_advance_minutes: 5
+        }))
       }
     } catch (err) {
       console.error('[Store] 初始化默认便签失败:', err)
-      notes.value = defaultNotes.map((n, i) => ({ id: i + 1, ...n }))
+      notes.value = defaultNotes.map((n, i) => ({
+        id: i + 1,
+        ...n,
+        auto_remind: 0,
+        default_advance_minutes: 5
+      }))
     }
   }
 
@@ -320,9 +346,13 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
     if (supportsDatabase()) {
       try {
         if (platformInfo.isCapacitor && database.isReady()) {
+          const autoRemind = noteData.auto_remind !== undefined ? (noteData.auto_remind ? 1 : 0) : 0
+          const defaultAdvanceMinutes = Number.isFinite(noteData.default_advance_minutes)
+            ? Math.max(0, noteData.default_advance_minutes)
+            : 5
           const result = await database.run(
-            'INSERT INTO notes (user_id, name, color) VALUES (1, ?, ?);',
-            [noteData.name, noteData.color || '#909399']
+            'INSERT INTO notes (user_id, name, color, auto_remind, default_advance_minutes) VALUES (1, ?, ?, ?, ?);',
+            [noteData.name, noteData.color || '#909399', autoRemind, defaultAdvanceMinutes]
           )
           const newNote = await database.query(
             'SELECT * FROM notes WHERE id = ?;',
@@ -332,7 +362,9 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
             notes.value.push({
               id: newNote[0].id,
               name: newNote[0].name,
-              color: newNote[0].color
+              color: newNote[0].color,
+              auto_remind: Number(newNote[0].auto_remind || 0),
+              default_advance_minutes: Number(newNote[0].default_advance_minutes || 5)
             })
             console.log('[Store] ✅ Capacitor 创建便签成功:', newNote[0])
             return notes.value[notes.value.length - 1]
@@ -343,7 +375,9 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
             notes.value.push({
               id: result.data.id,
               name: result.data.name,
-              color: result.data.color
+              color: result.data.color,
+              auto_remind: Number(result.data.auto_remind || 0),
+              default_advance_minutes: Number(result.data.default_advance_minutes || 5)
             })
             console.log('[Store] ✅ Electron 创建便签成功:', result.data)
             return notes.value[notes.value.length - 1]
@@ -358,7 +392,11 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
     const tempNote = {
       id: Date.now(),
       name: noteData.name,
-      color: noteData.color || '#909399'
+      color: noteData.color || '#909399',
+      auto_remind: noteData.auto_remind ? 1 : 0,
+      default_advance_minutes: Number.isFinite(noteData.default_advance_minutes)
+        ? Math.max(0, noteData.default_advance_minutes)
+        : 5
     }
     notes.value.push(tempNote)
     return tempNote
@@ -372,22 +410,63 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
     const idx = notes.value.findIndex(n => n.id === noteId)
     if (idx === -1) return null
 
+    // 标准化自动提醒字段类型
+    const normalizedUpdates = { ...updates }
+    if (normalizedUpdates.auto_remind !== undefined) {
+      normalizedUpdates.auto_remind = normalizedUpdates.auto_remind ? 1 : 0
+    }
+    if (normalizedUpdates.default_advance_minutes !== undefined) {
+      normalizedUpdates.default_advance_minutes = Number(normalizedUpdates.default_advance_minutes) || 5
+    }
+
     if (supportsDatabase()) {
       try {
         if (platformInfo.isCapacitor && database.isReady()) {
-          await database.run(
-            'UPDATE notes SET name = ?, color = ?, updated_at = datetime(\'now\') WHERE id = ?;',
-            [updates.name || notes.value[idx].name, updates.color || notes.value[idx].color, noteId]
-          )
-          notes.value[idx] = { ...notes.value[idx], ...updates }
-          console.log('[Store] ✅ Capacitor 更新便签成功')
-          return notes.value[idx]
+          // 构建动态更新SQL,支持所有字段
+          const fields = []
+          const values = []
+
+          if (normalizedUpdates.name !== undefined) {
+            fields.push('name = ?')
+            values.push(normalizedUpdates.name)
+          }
+          if (normalizedUpdates.color !== undefined) {
+            fields.push('color = ?')
+            values.push(normalizedUpdates.color)
+          }
+          if (normalizedUpdates.auto_remind !== undefined) {
+            fields.push('auto_remind = ?')
+            values.push(normalizedUpdates.auto_remind)
+          }
+          if (normalizedUpdates.default_advance_minutes !== undefined) {
+            fields.push('default_advance_minutes = ?')
+            values.push(normalizedUpdates.default_advance_minutes)
+          }
+
+          if (fields.length > 0) {
+            fields.push('updated_at = datetime(\'now\')')
+            values.push(noteId)
+
+            await database.run(
+              `UPDATE notes SET ${fields.join(', ')} WHERE id = ?;`,
+              values
+            )
+            // ⚠️ 使用数组替换确保触发 Vue 响应式更新（ref 必须感知到数组引用变化）
+            notes.value = notes.value.map(n =>
+              n.id === noteId ? { ...n, ...normalizedUpdates } : n
+            )
+            console.log('[Store] ✅ Capacitor 更新便签成功')
+            return notes.value.find(n => n.id === noteId)
+          }
         } else if (isElectron()) {
-          const result = await window.electronAPI.updateNote(noteId, updates)
+          const result = await window.electronAPI.updateNote(noteId, normalizedUpdates)
           if (result.success) {
-            notes.value[idx] = { ...notes.value[idx], ...updates }
+            // ⚠️ 使用数组替换确保触发 Vue 响应式更新（ref 必须感知到数组引用变化）
+            notes.value = notes.value.map(n =>
+              n.id === noteId ? { ...n, ...normalizedUpdates } : n
+            )
             console.log('[Store] ✅ Electron 更新便签成功')
-            return notes.value[idx]
+            return notes.value.find(n => n.id === noteId)
           }
         }
       } catch (err) {
@@ -395,9 +474,11 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       }
     }
 
-    // 本地更新
-    notes.value[idx] = { ...notes.value[idx], ...updates }
-    return notes.value[idx]
+    // 本地更新（fallback）
+    notes.value = notes.value.map(n =>
+      n.id === noteId ? { ...n, ...normalizedUpdates } : n
+    )
+    return notes.value.find(n => n.id === noteId)
   }
 
   /**
@@ -741,14 +822,28 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
     const idx = blocks.value.findIndex(b => b.id === id)
     if (idx === -1) return null
 
+    const oldBlock = blocks.value[idx]
+    const oldStart = `${oldBlock.date}T${oldBlock.startTime}:00`
+
     if (isElectron()) {
       try {
-        const dbData = frontendBlockToDb({ ...blocks.value[idx], ...updates })
+        const dbData = frontendBlockToDb({ ...oldBlock, ...updates })
         const result = await window.electronAPI.updateTimeBlock(id, dbData)
         if (result.success && result.data) {
           const updatedBlock = dbBlockToFrontend(result.data)
           blocks.value[idx] = updatedBlock
           console.log('[Store] 更新时间块:', id)
+
+          // 若开始时间（含日期）发生变化，同步更新关联提醒
+          const newStart = `${updatedBlock.date}T${updatedBlock.startTime}:00`
+          if (newStart !== oldStart) {
+            try {
+              await syncReminderAfterTimeBlockUpdate(updatedBlock)
+            } catch (reminderErr) {
+              console.warn('[Store] 同步提醒失败:', reminderErr)
+            }
+          }
+
           return updatedBlock
         }
       } catch (err) {
@@ -757,7 +852,7 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
     }
 
     // 非 Electron 环境或失败时，本地更新
-    blocks.value[idx] = { ...blocks.value[idx], ...updates }
+    blocks.value[idx] = { ...oldBlock, ...updates }
     return blocks.value[idx]
   }
 

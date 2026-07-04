@@ -101,7 +101,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { Delete, Plus, Tickets } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@utils/message'
 import { useTimeBlockStore } from '@stores/timeBlock'
 
 const emit = defineEmits(['dragstart', 'recycle-block', 'note-click', 'mobile-drag-start', 'mobile-drag-move', 'mobile-drag-end'])
