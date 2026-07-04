@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs')
-const { User } = require('../models')
+const { User, Note, TimeBlock, Reminder, SyncLog, Statistic } = require('../models')
 const { success, error } = require('../utils/response')
 
 /**
@@ -60,4 +60,60 @@ async function changePassword(req, res, next) {
   }
 }
 
-module.exports = { updateProfile, changePassword }
+/**
+ * DELETE /api/users/account
+ * 账号注销 — 密码二次确认后软删除用户及清理关联数据
+ */
+async function deleteAccount(req, res, next) {
+  try {
+    const { password } = req.body
+    const user = req.user
+
+    if (!password) {
+      return error(res, 'VALIDATION_ERROR', '请输入密码以确认注销', 400)
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password)
+    if (!isPasswordValid) {
+      return error(res, 'VALIDATION_ERROR', '密码错误，无法注销账号', 400)
+    }
+
+    const now = new Date()
+
+    // 清除敏感信息并脱敏
+    await user.update({
+      email: `deleted_${user.id}_${Date.now()}@deleted.timeblock`,
+      name: '已注销用户',
+      avatar: null,
+      reset_token: null,
+      reset_token_expires: null
+    })
+
+    // 软删除用户（paranoid 模式自动设置 deleted_at）
+    await user.destroy()
+
+    // 软删除便签和时间块（Note / TimeBlock 开启了 paranoid）
+    await Promise.all([
+      Note.update({ deleted_at: now }, { where: { user_id: user.id, deleted_at: null } }),
+      TimeBlock.update({ deleted_at: now }, { where: { user_id: user.id, deleted_at: null } })
+    ])
+
+    // 硬删除提醒、同步日志、统计数据（无 paranoid，属于可丢弃数据）
+    await Promise.all([
+      Reminder.destroy({ where: { user_id: user.id } }),
+      SyncLog.destroy({ where: { user_id: user.id } }),
+      Statistic.destroy({ where: { user_id: user.id } })
+    ])
+
+    console.log(`[注销] 用户 ${user.id} 已注销，关联数据已清理`)
+
+    return success(res, {
+      deletedAt: now.toISOString()
+    }, '账号已成功注销')
+
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = { updateProfile, changePassword, deleteAccount }

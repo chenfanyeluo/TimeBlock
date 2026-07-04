@@ -140,8 +140,8 @@ export function put(endpoint, body = {}) {
 /**
  * DELETE 请求
  */
-export function del(endpoint) {
-  return request(endpoint, { method: 'DELETE' })
+export function del(endpoint, body = null) {
+  return request(endpoint, { method: 'DELETE', body })
 }
 
 // 导出默认客户端

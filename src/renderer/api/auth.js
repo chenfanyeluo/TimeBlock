@@ -134,6 +134,23 @@ export async function resetPassword(token, newPassword) {
   throw new Error(response.message || '重置密码失败')
 }
 
+/**
+ * 账号注销（需密码二次确认）
+ *
+ * @param {string} password 登录密码
+ * @returns {Promise<{ deletedAt }>}
+ */
+export async function deleteAccount(password) {
+  const response = await client.del('/users/account', { password })
+
+  if (response.success) {
+    clearToken()
+    return response.data
+  }
+
+  throw new Error(response.message || '账号注销失败')
+}
+
 export default {
   login,
   register,
@@ -143,5 +160,6 @@ export default {
   checkLogin,
   getStoredToken,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  deleteAccount
 }
