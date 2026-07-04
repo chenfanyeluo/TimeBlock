@@ -1736,37 +1736,14 @@ function onMobileBlockDragMove(data) {
 }
 
 /**
- * 移动端：时间块拖拽结束，在便签栏区域回收
+ * 移动端：时间块拖拽结束，清理拖拽状态
+ * （实际的时间轴重定位 / 便签栏回收已由 TimeBlockItem 内部通过 update / recycle 事件处理）
  */
 function onMobileBlockDragEnd(data) {
   if (!mobileBlockDragState.value.active) return
 
-  const { block, clientX, clientY, categoryColor, categoryName } = data
-
   // 关闭上下文菜单（修复拖拽结束后菜单依旧存在的问题）
   hideContextMenu()
-
-  // 检测是否在便签栏区域上方
-  const poolEl = taskPoolRef.value?.$el || document.querySelector('.task-pool')
-  let recycled = false
-
-  if (poolEl) {
-    const poolRect = poolEl.getBoundingClientRect()
-    const overPool = clientX >= poolRect.left && clientX <= poolRect.right &&
-                     clientY >= poolRect.top && clientY <= poolRect.bottom
-
-    if (overPool && block) {
-      // 回收时间块到便签栏
-      taskPoolRef.value?.recycleTask(categoryName || block.noteName || block.taskName, categoryColor || block.noteColor)
-      // 删除时间块
-      deleteBlock(block.id)
-      if (selectedBlockId.value === block.id) {
-        selectedBlockId.value = null
-      }
-      ElMessage.success(`"${categoryName || block.noteName || block.taskName}"已回收到便签栏`)
-      recycled = true
-    }
-  }
 
   // 重置拖拽状态
   mobileBlockDragState.value = {

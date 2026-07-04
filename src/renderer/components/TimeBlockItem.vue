@@ -8,8 +8,7 @@
       'is-multi': isMulti,
       'selected': selected,
       'will-recycle': isDragging && isOverPool,
-      'compact': isCompact,
-      'mobile-dragging': _isMobileBlockDragging
+      'compact': isCompact
     }"
     :style="finalStyle"
     @mousedown="handleMouseDown"
@@ -64,7 +63,7 @@
     <!-- 调整大小手柄 -->
     <div class="resize-handle" @mousedown.stop="startResize"></div>
 
-    <!-- 拖拽时的实时时间提示（跟随鼠标） -->
+    <!-- 拖拽时的实时时间提示（跟随鼠标/手指） -->
     <div v-if="isDragging" class="drag-time-tooltip">
       {{ dragTimeDisplay }}
     </div>
@@ -108,6 +107,7 @@ const snapshotEndMin = ref(0)
 // ---- 移动端触摸拖拽状态 ----
 let _mobileBlockDragTimer = null
 let _isMobileBlockDragging = false
+let _mobileDragStartY = 0         // 拖拽起始触摸 Y（用于计算 dragOffsetY）
 const MOBILE_BLOCK_DRAG_DELAY = 400 // 长按触发拖拽的延迟（毫秒）
 const isMobileDevice = ref(false) // 判断是否移动端
 
@@ -528,6 +528,16 @@ function onBlockTouchStart(e) {
     if (!_mobileTouchMoved) {
       _isMobileBlockDragging = true
       _suppressNextClick = true // 长按触发拖拽时，阻止后续 click 事件
+
+      // 记录拖拽起始触摸位置（用于计算时间轴偏移）
+      _mobileDragStartY = touch.clientY
+
+      // 设置时间轴拖拽状态（复用 PC 端逻辑）
+      snapshotStartMin.value = timeToMinutes(props.block.startTime)
+      snapshotEndMin.value = timeToMinutes(props.block.endTime)
+      dragOffsetY.value = 0
+      isDragging.value = true
+
       // 通知父组件开始拖拽
       emit('mobile-block-drag-start', {
         block: props.block,
@@ -559,6 +569,15 @@ function onBlockTouchMove(e) {
 
   e.preventDefault() // 拖拽时阻止页面滚动
   const touch = e.touches[0]
+
+  // 更新时间轴偏移（复用 PC 端 dragOffsetY 逻辑）
+  dragOffsetY.value = touch.clientY - _mobileDragStartY
+
+  // 检测是否在便签栏区域上方
+  const over = isMouseOverPool(touch.clientX, touch.clientY)
+  isOverPool.value = over
+  emit('drag-over-pool', over)
+
   emit('mobile-block-drag-move', {
     clientX: touch.clientX,
     clientY: touch.clientY
@@ -582,10 +601,73 @@ function onBlockTouchEnd(e) {
   e.preventDefault()
 
   if (_isMobileBlockDragging) {
-    // 长按拖拽结束
+    // 长按拖拽结束：处理时间轴重定位或便签栏回收
     _isMobileBlockDragging = false
     _mobileTouchMoved = false
     const touch = e.changedTouches[0]
+
+    // 检测是否拖到便签栏区域进行回收
+    const overPool = isMouseOverPool(touch.clientX, touch.clientY)
+
+    // 离开拖拽状态前通知父组件取消高亮
+    emit('drag-over-pool', false)
+
+    if (overPool) {
+      // 回收：通知父组件删除块并回收到便签栏
+      isDragging.value = false
+      dragOffsetY.value = 0
+      isOverPool.value = false
+
+      emit('recycle', {
+        blockId: props.block.id,
+        taskName: props.block.taskName,
+        categoryColor: categoryColor.value,
+      })
+    } else {
+      // 时间轴重定位：计算新时间（与 PC 端 onDragEnd 逻辑一致）
+      const deltaMinutes = Math.round((dragOffsetY.value / props.hourHeight) * 60)
+      const originalDuration = snapshotEndMin.value - snapshotStartMin.value
+      const granularity = store.timeGranularity || 15
+
+      const rawNewStart = snapshotStartMin.value + deltaMinutes
+      const rawNewEnd = rawNewStart + originalDuration
+
+      let boundedStart = Math.max(0, rawNewStart)
+      let boundedEnd = Math.min(1440, rawNewEnd)
+
+      if (boundedEnd - boundedStart < granularity) {
+        if (rawNewStart < granularity) {
+          boundedStart = 0
+          boundedEnd = originalDuration
+        } else {
+          boundedEnd = 1440
+          boundedStart = 1440 - originalDuration
+        }
+      }
+
+      let newStart = snapToGrid(boundedStart)
+      let newEnd = snapToGrid(boundedEnd)
+
+      if (newEnd - newStart < granularity) {
+        newEnd = snapToGrid(newStart + granularity)
+        if (newEnd > 1440) newEnd = 1440
+      }
+
+      // 重置拖拽状态
+      isDragging.value = false
+      dragOffsetY.value = 0
+      isOverPool.value = false
+
+      // 只在位置确实改变时才 emit
+      if (newStart !== timeToMinutes(props.block.startTime)) {
+        emit('update', {
+          startTime: minutesToTime(newStart),
+          endTime: minutesToTime(newEnd)
+        })
+      }
+    }
+
+    // 通知父组件移动端拖拽结束
     emit('mobile-block-drag-end', {
       block: props.block,
       clientX: touch.clientX,
@@ -636,14 +718,6 @@ function onBlockTouchEnd(e) {
 
   &.resizing {
     cursor: ns-resize;
-  }
-
-  // 移动端拖拽状态
-  &.mobile-dragging {
-    opacity: 0.6;
-    transform: scale(0.95);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-    border-color: var(--success-color);
   }
 
   &.will-recycle {
