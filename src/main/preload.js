@@ -35,6 +35,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 获取所有便签 */
   getAllNotes: () => ipcRenderer.invoke('note:getAll'),
 
+  /** 根据 ID 获取便签 */
+  getNoteById: (id) => ipcRenderer.invoke('note:getById', id),
+
   /** 创建便签 */
   createNote: (data) => ipcRenderer.invoke('note:create', data),
 
@@ -54,11 +57,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbDelete: (sql, params) => ipcRenderer.invoke('db:delete', sql, params),
 
   // =============================================
+  // 系统通知（Electron 原生通知）
+  // =============================================
+
+  /** 显示原生系统通知 */
+  showNotification: (options) => ipcRenderer.invoke('notification:show', options),
+
+  // =============================================
   // 同步操作（保留原有 API）
   // =============================================
 
   syncStart: () => ipcRenderer.invoke('sync:start'),
-  syncStatus: (callback) => ipcRenderer.on('sync:status', callback),
+  syncStatus: () => ipcRenderer.invoke('sync:status'),
 
   // =============================================
   // 认证操作（保留原有 API）

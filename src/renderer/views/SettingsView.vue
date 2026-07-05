@@ -123,6 +123,7 @@
               <el-form-item>
                 <el-button type="primary" @click="login">登录</el-button>
                 <el-button @click="register">注册</el-button>
+                <el-button type="warning" link @click="openForgotPassword">忘记密码?</el-button>
               </el-form-item>
             </template>
 
@@ -145,17 +146,27 @@
               :key="note.id"
               class="category-item"
             >
-              <el-color-picker v-model="note.color" size="small" />
-              <el-input v-model="note.name" size="small" class="category-name-input" />
+              <el-color-picker
+                v-model="note.color"
+                size="small"
+                @change="(val) => handleNoteColorChange(note, val)"
+              />
+              <el-input
+                v-model="note.name"
+                size="small"
+                class="category-name-input"
+                @blur="handleNoteNameChange(note)"
+                @keyup.enter="handleNoteNameChange(note)"
+              />
               <el-button
                 type="danger"
                 size="small"
                 :icon="Delete"
                 circle
-                @click="deleteNote(note.id)"
+                @click="handleDeleteNote(note.id)"
               />
             </div>
-            <el-button type="primary" :icon="Plus" @click="addNote">添加便签</el-button>
+            <el-button type="primary" :icon="Plus" @click="handleAddNote" :loading="addingNote">添加便签</el-button>
           </div>
         </el-tab-pane>
 
@@ -168,6 +179,75 @@
               </el-radio-group>
             </el-form-item>
           </el-form>
+
+          <!-- 提醒管理区域 -->
+          <el-divider content-position="left">提醒管理</el-divider>
+          <div class="reminder-section" v-loading="loadingReminders">
+            <!-- 时间块提醒 -->
+            <el-card class="reminder-card">
+              <template #header>时间块提醒</template>
+              <div v-if="reminderTimeBlocks.length === 0" class="empty-hint">
+                暂无设置了提醒的时间块
+              </div>
+              <div v-else class="reminder-list">
+                <div
+                  v-for="reminder in reminderTimeBlocks"
+                  :key="reminder.id"
+                  class="reminder-item"
+                >
+                  <div class="reminder-info">
+                    <span class="reminder-title">{{ reminder.title }}</span>
+                    <span class="reminder-time">提醒时间: {{ new Date(reminder.remind_at).toLocaleString() }}</span>
+                  </div>
+                  <el-button
+                    type="danger"
+                    size="small"
+                    @click="cancelReminder(reminder)"
+                  >
+                    取消提醒
+                  </el-button>
+                </div>
+              </div>
+            </el-card>
+
+            <!-- 便签自动提醒 -->
+            <el-card class="reminder-card">
+              <template #header>便签自动提醒</template>
+              <div v-if="notes.length === 0" class="empty-hint">
+                暂无便签
+              </div>
+              <div v-else class="auto-remind-list">
+                <div
+                  v-for="note in notes"
+                  :key="note.id"
+                  class="auto-remind-item"
+                >
+                  <div class="note-info">
+                    <el-color-picker v-model="note.color" size="small" disabled />
+                    <span class="note-name">{{ note.name }}</span>
+                  </div>
+                  <div class="note-remind-controls">
+                    <el-input-number
+                      v-if="note.auto_remind === 1"
+                      :model-value="note.default_advance_minutes || 5"
+                      @change="(val) => toggleNoteAutoRemind(note.id, true, val)"
+                      :min="1"
+                      :max="60"
+                      size="small"
+                      style="width: 100px;"
+                    />
+                    <span v-if="note.auto_remind === 1" class="advance-hint">分钟前提醒</span>
+                    <el-switch
+                      :model-value="note.auto_remind === 1"
+                      @change="(val) => toggleNoteAutoRemind(note.id, val, note.default_advance_minutes || 5)"
+                      active-text="开"
+                      inactive-text="关"
+                    />
+                  </div>
+                </div>
+              </div>
+            </el-card>
+          </div>
         </el-tab-pane>
 
         <el-tab-pane label="外观设置">
@@ -210,6 +290,47 @@
 
       </el-tabs>
     </div>
+
+    <!-- 密码找回对话框 -->
+    <el-dialog v-model="showForgotPasswordDialog" title="找回密码" width="400px">
+      <!-- 步骤1：输入邮箱 -->
+      <el-form v-if="forgotPasswordStep === 1" label-width="80px">
+        <el-form-item label="邮箱">
+          <el-input v-model="forgotEmail" placeholder="请输入注册邮箱" />
+        </el-form-item>
+      </el-form>
+
+      <!-- 步骤2：输入Token和新密码 -->
+      <div v-if="forgotPasswordStep === 2">
+        <el-alert type="info" :closable="false" style="margin-bottom: 16px">
+          <template #title>
+            <span v-if="receivedResetToken">重置Token已生成（开发模式显示）：{{ receivedResetToken }}</span>
+            <span v-else>请输入收到的重置Token</span>
+          </template>
+        </el-alert>
+        <el-form label-width="100px">
+          <el-form-item label="重置Token">
+            <el-input v-model="resetTokenInput" placeholder="请输入重置Token" />
+          </el-form-item>
+          <el-form-item label="新密码">
+            <el-input
+              v-model="newPassword"
+              type="password"
+              placeholder="请输入新密码（至少6位）"
+              show-password
+            />
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <template #footer>
+        <el-button v-if="forgotPasswordStep === 1" @click="showForgotPasswordDialog = false">取消</el-button>
+        <el-button v-if="forgotPasswordStep === 2" @click="forgotPasswordStep = 1">返回</el-button>
+        <el-button type="primary" @click="forgotPasswordStep === 1 ? handleForgotPassword() : handleResetPassword()" :loading="forgotPasswordStep === 1 ? sendingResetToken : resettingPassword">
+          {{ forgotPasswordStep === 1 ? '发送重置链接' : '重置密码' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -217,8 +338,13 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Delete, Plus, Download, Upload, ArrowRight, Connection, User, Tickets, Setting, Brush, FolderOpened } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { ElMessage } from '@utils/message'
+import dayjs from 'dayjs'
 import { useTimeBlockStore } from '@stores/timeBlock'
+import * as authApi from '@api/auth'
+import * as syncApi from '@api/sync'
+import { getTimeBlockReminder, cancelTimeBlockReminder, getPendingReminders } from '../services/reminder'
 
 const router = useRouter()
 const store = useTimeBlockStore()
@@ -229,9 +355,64 @@ const checkMobile = () => {
   isMobile.value = window.innerWidth <= 799
 }
 
-onMounted(() => {
+// 登录状态（基于 Token）
+const isLoggedIn = ref(false)
+const userInfo = ref({
+  username: 'User',
+  email: 'user@example.com'
+})
+
+// 数据同步相关
+const isOnline = ref(navigator.onLine)
+const lastSyncTime = ref('')
+const autoSync = ref(false)
+const syncInterval = ref('15min')
+const localCount = computed(() => store.blocks.length)
+const cloudCount = ref(0)
+const pendingCount = ref(0)
+const syncing = ref(false) // 同步进行中标志
+
+// 检查登录状态并加载用户信息
+async function checkAuthStatus() {
+  isLoggedIn.value = authApi.checkLogin()
+  if (isLoggedIn.value) {
+    try {
+      const user = await authApi.getCurrentUser()
+      userInfo.value = {
+        username: user.name || 'User',
+        email: user.email || 'user@example.com'
+      }
+    } catch (err) {
+      console.error('[Settings] 获取用户信息失败:', err)
+      // Token 可能已过期，清除登录状态
+      isLoggedIn.value = false
+    }
+  }
+}
+
+// 加载同步状态
+async function loadSyncStatus() {
+  if (!isLoggedIn.value) return
+  try {
+    const status = await syncApi.getSyncStatus()
+    if (status.lastSyncAt) {
+      lastSyncTime.value = new Date(status.lastSyncAt).toLocaleString()
+    }
+    cloudCount.value = status.totalSyncs || 0
+  } catch (err) {
+    console.error('[Settings] 加载同步状态失败:', err)
+  }
+}
+
+onMounted(async () => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
+  // 初始化登录状态
+  await checkAuthStatus()
+  // 加载同步状态
+  await loadSyncStatus()
+  // 加载提醒数据
+  await loadReminders()
 })
 
 onUnmounted(() => {
@@ -261,7 +442,7 @@ const settingItems = [
   {
     key: 'general',
     label: '通用设置',
-    description: '默认视图、其他通用选项',
+    description: '默认视图、提醒管理',
     icon: Setting
   },
   {
@@ -283,15 +464,6 @@ function openSettingDetail(key) {
   router.push(`/settings/${key}`)
 }
 
-// 数据同步相关
-const isOnline = ref(navigator.onLine)
-const lastSyncTime = ref('')
-const autoSync = ref(false)
-const syncInterval = ref('15min')
-const localCount = computed(() => store.blocks.length)
-const cloudCount = ref(0)
-const pendingCount = ref(0)
-
 // 监听网络状态
 window.addEventListener('online', () => { isOnline.value = true })
 window.addEventListener('offline', () => { isOnline.value = false })
@@ -301,13 +473,93 @@ const accountForm = ref({
   password: ''
 })
 
-const userInfo = ref({
-  username: 'User',
-  email: 'user@example.com'
-})
-
-const isLoggedIn = ref(false)
 const defaultView = ref('record')
+
+// ---- 密码找回功能 ----
+const showForgotPasswordDialog = ref(false)
+const forgotPasswordStep = ref(1)
+const forgotEmail = ref('')
+const receivedResetToken = ref('')
+const resetTokenInput = ref('')
+const newPassword = ref('')
+const sendingResetToken = ref(false)
+const resettingPassword = ref(false)
+
+// 打开密码找回对话框
+function openForgotPassword() {
+  showForgotPasswordDialog.value = true
+  forgotPasswordStep.value = 1
+  forgotEmail.value = accountForm.value.email || ''
+  receivedResetToken.value = ''
+  resetTokenInput.value = ''
+  newPassword.value = ''
+}
+
+// 发送重置Token
+async function handleForgotPassword() {
+  if (!forgotEmail.value) {
+    ElMessage.warning('请输入邮箱')
+    return
+  }
+
+  sendingResetToken.value = true
+  try {
+    const result = await authApi.forgotPassword(forgotEmail.value)
+    ElMessage.success(result.message || '重置链接已发送')
+
+    // 开发模式：显示Token
+    if (result.resetToken) {
+      receivedResetToken.value = result.resetToken
+      resetTokenInput.value = result.resetToken
+    }
+
+    // 进入步骤2
+    forgotPasswordStep.value = 2
+  } catch (err) {
+    console.error('[Settings] 发送重置Token失败:', err)
+    ElMessage.error(err.message || '发送失败')
+  } finally {
+    sendingResetToken.value = false
+  }
+}
+
+// 重置密码
+async function handleResetPassword() {
+  if (!resetTokenInput.value || !newPassword.value) {
+    ElMessage.warning('请填写完整信息')
+    return
+  }
+
+  if (newPassword.value.length < 6) {
+    ElMessage.warning('密码长度至少6位')
+    return
+  }
+
+  resettingPassword.value = true
+  try {
+    const result = await authApi.resetPassword(resetTokenInput.value, newPassword.value)
+    ElMessage.success(result.message || '密码已重置成功')
+
+    // 自动登录
+    isLoggedIn.value = true
+    userInfo.value = {
+      username: result.user?.name || 'User',
+      email: result.user?.email || forgotEmail.value
+    }
+
+    // 关闭对话框
+    showForgotPasswordDialog.value = false
+    forgotPasswordStep.value = 1
+
+    // 加载同步状态
+    await loadSyncStatus()
+  } catch (err) {
+    console.error('[Settings] 重置密码失败:', err)
+    ElMessage.error(err.message || '重置密码失败')
+  } finally {
+    resettingPassword.value = false
+  }
+}
 
 // 主题选项（含预览色）
 const themeOptions = [
@@ -370,81 +622,495 @@ async function handleAnimationChange(val) {
 }
 
 const notes = computed(() => store.notes)
+const addingNote = ref(false)
 
-// 数据同步方法
-function syncNow() {
+// 提醒管理相关状态
+const reminderTimeBlocks = ref([])
+const autoRemindNotes = ref([])
+const loadingReminders = ref(false)
+
+// 加载提醒数据
+async function loadReminders() {
+  loadingReminders.value = true
+  try {
+    // 获取待提醒的时间块列表
+    const pendingReminders = await getPendingReminders()
+    reminderTimeBlocks.value = pendingReminders.filter(r => r.target_type === 'time_block')
+
+    // 获取开启了自动提醒的便签
+    autoRemindNotes.value = notes.value.filter(n => n.auto_remind === 1).map(n => ({
+      ...n,
+      advanceMinutes: n.default_advance_minutes || 5
+    }))
+  } catch (err) {
+    console.error('[SettingsView] 加载提醒数据失败:', err)
+    ElMessage.error('加载提醒数据失败')
+  } finally {
+    loadingReminders.value = false
+  }
+}
+
+// 取消单个提醒
+async function cancelReminder(reminder) {
+  try {
+    // 使用 target_id (时间块ID) 取消提醒
+    await cancelTimeBlockReminder(reminder.target_id)
+    ElMessage.success('提醒已取消')
+    await loadReminders()
+  } catch (err) {
+    console.error('[SettingsView] 取消提醒失败:', err)
+    ElMessage.error('取消提醒失败')
+  }
+}
+
+// 开关便签自动提醒
+async function toggleNoteAutoRemind(noteId, enabled, advanceMinutes = 5) {
+  try {
+    // 通过 store.updateNote 同时更新数据库与前端响应式状态，
+    // 确保 switch 等 UI 元素能即时同步。
+    await store.updateNote(noteId, {
+      auto_remind: enabled ? 1 : 0,
+      default_advance_minutes: advanceMinutes
+    })
+    ElMessage.success(enabled ? '已开启自动提醒' : '已关闭自动提醒')
+    await loadReminders()
+  } catch (err) {
+    console.error('[SettingsView] 设置便签自动提醒失败:', err)
+    ElMessage.error('设置便签自动提醒失败')
+  }
+}
+
+// 便签管理 - 添加便签（调用 store.createNote 持久化到数据库）
+async function handleAddNote() {
+  addingNote.value = true
+  try {
+    const newNote = await store.createNote({
+      name: '新便签',
+      color: '#909399'
+    })
+    if (newNote) {
+      ElMessage.success('便签已添加')
+    } else {
+      ElMessage.error('添加便签失败')
+    }
+  } catch (err) {
+    console.error('[SettingsView] 添加便签失败:', err)
+    ElMessage.error('添加便签失败')
+  } finally {
+    addingNote.value = false
+  }
+}
+
+// 便签管理 - 删除便签（调用 store.deleteNote 持久化到数据库）
+async function handleDeleteNote(noteId) {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除此便签吗？关联的时间块将解除绑定。',
+      '删除便签',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+
+    const success = await store.deleteNote(noteId)
+    if (success) {
+      ElMessage.success('便签已删除')
+    } else {
+      ElMessage.error('删除便签失败')
+    }
+  } catch (err) {
+    if (err !== 'cancel') {
+      console.error('[SettingsView] 删除便签失败:', err)
+      ElMessage.error('删除便签失败')
+    }
+  }
+}
+
+// 便签管理 - 更新便签名称（失焦或回车时触发）
+async function handleNoteNameChange(note) {
+  if (!note.name || note.name.trim() === '') {
+    ElMessage.warning('便签名称不能为空')
+    return
+  }
+  try {
+    await store.updateNote(note.id, { name: note.name.trim() })
+  } catch (err) {
+    console.error('[SettingsView] 更新便签名称失败:', err)
+    ElMessage.error('更新便签名称失败')
+  }
+}
+
+// 便签管理 - 更新便签颜色（颜色选择器变化时触发）
+async function handleNoteColorChange(note, newColor) {
+  if (!newColor) return
+  try {
+    await store.updateNote(note.id, { color: newColor })
+  } catch (err) {
+    console.error('[SettingsView] 更新便签颜色失败:', err)
+    ElMessage.error('更新便签颜色失败')
+  }
+}
+
+// 数据同步方法 - 执行完整同步（上传 + 下载）
+async function syncNow() {
   if (!isOnline.value) {
     ElMessage.warning('当前离线模式，无法同步')
     return
   }
+
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再同步')
+    return
+  }
+
+  syncing.value = true
   ElMessage.info('正在同步数据...')
-  // 模拟同步
-  setTimeout(() => {
-    lastSyncTime.value = new Date().toLocaleString()
+
+  try {
+    // 收集本地数据
+    const localData = {
+      notes: store.notes.map(n => ({
+        id: n.id,
+        name: n.name,
+        color: n.color
+      })),
+      timeBlocks: store.blocks.map(b => {
+        // 24:00 结束 → 转为次日 00:00（与 frontendBlockToDb 一致）
+        let endTimeValue
+        if (b.endTime === '24:00') {
+          const nextDate = dayjs(b.date).add(1, 'day').format('YYYY-MM-DD')
+          endTimeValue = `${nextDate}T00:00:00`
+        } else {
+          endTimeValue = `${b.date}T${b.endTime}:00`
+        }
+        return {
+          id: b.id,
+          noteId: b.noteId,
+          title: b.title,
+          description: b.remark || b.description,
+          startTime: `${b.date}T${b.startTime}:00`,
+          endTime: endTimeValue,
+          isCompleted: b.isCompleted ? 1 : 0
+        }
+      }),
+      syncType: 'manual'
+    }
+
+    // 执行同步
+    const result = await syncApi.fullSync(localData, lastSyncTime.value)
+
+    // 更新同步时间
+    lastSyncTime.value = new Date(result.serverTime).toLocaleString()
+
+    // 合并云端数据到本地（可选：根据业务需求决定是否覆盖）
+    if (result.data.notes && result.data.notes.length > 0) {
+      // 简单合并策略：云端数据覆盖本地
+      store.notes = result.data.notes.map(n => ({
+        id: n.id,
+        name: n.name,
+        color: n.color
+      }))
+    }
+
+    if (result.data.timeBlocks && result.data.timeBlocks.length > 0) {
+      // 简单合并策略：云端数据覆盖本地
+      store.blocks = result.data.timeBlocks.map(tb => {
+        // 还原 24:00：若 end 在次日且 HH:mm 为 00:00，说明原始是 24:00
+        let endTime = tb.endTime.split('T')[1]?.slice(0, 5) || '00:00'
+        const startDate = tb.startTime?.split('T')[0] || ''
+        const endDate = tb.endTime?.split('T')[0] || ''
+        if (endTime === '00:00' && endDate > startDate) {
+          endTime = '24:00'
+        }
+        return {
+          id: tb.id,
+          noteId: tb.noteId,
+          noteName: tb.note?.name || '未分类',
+          noteColor: tb.note?.color || '#909399',
+          title: tb.title,
+          description: tb.description,
+          startTime: tb.startTime.split('T')[1]?.slice(0, 5) || '00:00',
+          endTime: endTime,
+          date: tb.startTime.split('T')[0] || new Date().toISOString().split('T')[0],
+          isCompleted: tb.isCompleted === 1,
+          remark: tb.description || ''
+        }
+      })
+    }
+
     pendingCount.value = 0
-    ElMessage.success('数据同步成功！')
-  }, 1500)
+    ElMessage.success(`同步成功！上传 ${result.uploaded} 条，下载 ${result.downloaded.notes + result.downloaded.timeBlocks} 条`)
+
+  } catch (err) {
+    console.error('[Settings] 同步失败:', err)
+    ElMessage.error(err.message || '数据同步失败')
+  } finally {
+    syncing.value = false
+  }
 }
 
-function viewSyncLog() {
-  ElMessage.info('暂无同步日志')
+// 查看同步日志
+async function viewSyncLog() {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录')
+    return
+  }
+  try {
+    const result = await syncApi.getSyncLogs(1, 10)
+    if (result.items && result.items.length > 0) {
+      ElMessage.info(`最近同步：${result.items[0].syncType}，${result.items[0].recordsSynced || 0} 条记录`)
+    } else {
+      ElMessage.info('暂无同步记录')
+    }
+  } catch (err) {
+    ElMessage.error('获取同步日志失败')
+  }
 }
 
-function login() {
-  isLoggedIn.value = true
-  ElMessage.success('登录成功')
+// 用户登录
+async function login() {
+  if (!accountForm.value.email || !accountForm.value.password) {
+    ElMessage.warning('请输入邮箱和密码')
+    return
+  }
+
+  try {
+    const result = await authApi.login(accountForm.value.email, accountForm.value.password)
+    isLoggedIn.value = true
+    userInfo.value = {
+      username: result.user.name || 'User',
+      email: result.user.email || accountForm.value.email
+    }
+    ElMessage.success('登录成功')
+    // 登录后自动加载同步状态
+    await loadSyncStatus()
+  } catch (err) {
+    console.error('[Settings] 登录失败:', err)
+    ElMessage.error(err.message || '登录失败，请检查邮箱和密码')
+  }
 }
 
-function register() {
-  ElMessage.success('注册成功，请登录')
+// 用户注册
+async function register() {
+  if (!accountForm.value.email || !accountForm.value.password) {
+    ElMessage.warning('请输入邮箱和密码')
+    return
+  }
+
+  try {
+    await authApi.register(accountForm.value.email, accountForm.value.password, accountForm.value.email.split('@')[0])
+    ElMessage.success('注册成功，已自动登录')
+    // 注册后自动登录，刷新状态
+    await checkAuthStatus()
+  } catch (err) {
+    console.error('[Settings] 注册失败:', err)
+    ElMessage.error(err.message || '注册失败')
+  }
 }
 
+// 退出登录
 function logout() {
+  authApi.logout()
   isLoggedIn.value = false
+  userInfo.value = { username: 'User', email: 'user@example.com' }
+  lastSyncTime.value = ''
+  cloudCount.value = 0
   ElMessage.success('已退出登录')
 }
 
+// 更新用户资料（暂未实现后端 API）
 function updateProfile() {
   ElMessage.success('资料已更新')
 }
 
-function addNote() {
-  const id = `note-${Date.now()}`
-  store.notes.push({
-    id,
-    name: '新便签',
-    color: '#909399'
-  })
-}
-
-function deleteNote(id) {
-  const idx = store.notes.findIndex(n => n.id === id)
-  if (idx !== -1) {
-    store.notes.splice(idx, 1)
-  }
-}
-
+/**
+ * 导出数据（用于跨设备/用户分享）
+ *
+ * 导出包含便签和时间块的完整数据包，格式与后端 /api/export 保持一致
+ */
 function exportData() {
-  const data = JSON.stringify(store.blocks, null, 2)
+  const exportPackage = {
+    schemaVersion: '1.0',
+    app: 'TimeBlock',
+    exportedAt: new Date().toISOString(),
+    // 导出便签（包含颜色、自动提醒设置）
+    notes: store.notes.map(n => ({
+      name: n.name,
+      color: n.color,
+      autoRemind: n.auto_remind === 1,
+      defaultAdvanceMinutes: n.default_advance_minutes || 5
+    })),
+    // 导出时间块
+    timeBlocks: store.blocks.map(b => {
+      // 24:00 结束 → 转为次日 00:00
+      let endTimeValue
+      if (b.endTime === '24:00') {
+        const nextDate = dayjs(b.date).add(1, 'day').format('YYYY-MM-DD')
+        endTimeValue = `${nextDate}T00:00:00`
+      } else {
+        endTimeValue = `${b.date}T${b.endTime}:00`
+      }
+      return {
+        noteName: store.getNoteName(b.noteId), // 便签名称（用于匹配）
+        title: b.title,
+        description: b.remark || b.description || '',
+        startTime: `${b.date}T${b.startTime}:00`,
+        endTime: endTimeValue,
+        isCompleted: b.isCompleted
+      }
+    })
+  }
+
+  const data = JSON.stringify(exportPackage, null, 2)
   const blob = new Blob([data], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `timeblock-backup-${new Date().toISOString().split('T')[0]}.json`
+  a.download = `timeblock-export-${new Date().toISOString().split('T')[0]}.json`
   a.click()
   URL.revokeObjectURL(url)
-  ElMessage.success('数据导出成功')
+  ElMessage.success(`导出成功：${store.notes.length} 个便签，${store.blocks.length} 个时间块`)
 }
 
-function handleImport(file) {
+/**
+ * 导入数据（从其他设备/用户分享的文件）
+ *
+ * 智能合并策略：
+ * - 便签：按名称匹配，不存在则新建；已存在则更新颜色和自动提醒设置
+ * - 时间块：生成新 ID，匹配便签后导入
+ */
+async function handleImport(file) {
   const reader = new FileReader()
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
-      const data = JSON.parse(e.target.result)
-      store.blocks = data
-      ElMessage.success('数据导入成功')
-    } catch {
-      ElMessage.error('文件格式错误')
+      const importPackage = JSON.parse(e.target.result)
+
+      // 验证数据格式（与后端 /api/import 保持一致）
+      if (!importPackage.app || importPackage.app !== 'TimeBlock') {
+        ElMessage.error('无效的 TimeBlock 数据文件')
+        return
+      }
+
+      const importedNotes = importPackage.notes || []
+      const importedBlocks = importPackage.timeBlocks || []
+
+      if (importedNotes.length === 0 && importedBlocks.length === 0) {
+        ElMessage.warning('文件中没有可导入的数据')
+        return
+      }
+
+      // 显示导入确认对话框
+      const confirmResult = await ElMessageBox.confirm(
+        `即将导入 ${importedNotes.length} 个便签和 ${importedBlocks.length} 个时间块。\n数据将与本地数据合并，是否继续？`,
+        '导入数据确认',
+        {
+          confirmButtonText: '合并导入',
+          cancelButtonText: '取消',
+          type: 'info'
+        }
+      ).catch(() => 'cancel')
+
+      if (confirmResult === 'cancel') {
+        return
+      }
+
+      // 导入便签（按名称匹配）
+      const noteNameToId = {} // 导入便签名称 -> 本地便签 ID
+      let newNotesCount = 0
+      let updatedNotesCount = 0
+
+      for (const importedNote of importedNotes) {
+        const name = typeof importedNote.name === 'string' ? importedNote.name.trim() : ''
+        if (!name) continue
+
+        const color = /^#[0-9A-Fa-f]{6}$/.test(importedNote.color)
+          ? importedNote.color
+          : '#909399'
+        const autoRemind = importedNote.autoRemind === true || importedNote.autoRemind === 1 || importedNote.autoRemind === '1'
+        const defaultAdvanceMinutes = Number.isFinite(importedNote.defaultAdvanceMinutes)
+          ? Math.max(1, Math.min(60, importedNote.defaultAdvanceMinutes))
+          : 5
+
+        // 查找是否存在同名便签
+        const existingNote = store.notes.find(n => n.name === name)
+
+        if (existingNote) {
+          // 已存在同名便签：更新颜色和自动提醒设置，使用现有 ID
+          await store.updateNote(existingNote.id, {
+            color,
+            auto_remind: autoRemind,
+            default_advance_minutes: defaultAdvanceMinutes
+          })
+          noteNameToId[name] = existingNote.id
+          updatedNotesCount++
+        } else {
+          // 创建新便签
+          const newNote = await store.createNote({
+            name,
+            color,
+            auto_remind: autoRemind,
+            default_advance_minutes: defaultAdvanceMinutes
+          })
+          if (newNote) {
+            noteNameToId[name] = newNote.id
+            newNotesCount++
+          }
+        }
+      }
+
+      // 导入时间块（生成新 ID）
+      let newBlocksCount = 0
+      let skippedBlocksCount = 0
+      for (const importedBlock of importedBlocks) {
+        // 安全提取时间信息，兼容 ISO 字符串和其他格式
+        const startTimeValue = importedBlock.startTime
+        const endTimeValue = importedBlock.endTime
+        const startDate = startTimeValue ? new Date(startTimeValue) : null
+        const endDate = endTimeValue ? new Date(endTimeValue) : null
+
+        if (!startDate || isNaN(startDate.getTime()) || !endDate || isNaN(endDate.getTime())) {
+          skippedBlocksCount++
+          continue
+        }
+        if (endDate <= startDate) {
+          skippedBlocksCount++
+          continue
+        }
+
+        const dateStr = startDate.toISOString().split('T')[0]
+        const startTimeStr = startDate.toTimeString().slice(0, 5)
+        const endTimeStr = endDate.toTimeString().slice(0, 5)
+
+        // 匹配便签 ID
+        const noteName = typeof importedBlock.noteName === 'string' ? importedBlock.noteName.trim() : ''
+        const noteId = noteNameToId[noteName] || null
+
+        // 创建新时间块
+        const newBlock = await store.addBlock({
+          noteId: noteId,
+          title: importedBlock.title || '导入的时间块',
+          remark: importedBlock.description || '',
+          startTime: startTimeStr,
+          endTime: endTimeStr,
+          date: dateStr,
+          isCompleted: importedBlock.isCompleted === true || importedBlock.isCompleted === 1 || importedBlock.isCompleted === '1'
+        })
+
+        if (newBlock) {
+          newBlocksCount++
+        } else {
+          skippedBlocksCount++
+        }
+      }
+
+      ElMessage.success(
+        `导入成功！新增 ${newNotesCount} 个便签，更新 ${updatedNotesCount} 个便签，新增 ${newBlocksCount} 个时间块${skippedBlocksCount > 0 ? `，跳过 ${skippedBlocksCount} 个时间块` : ''}`
+      )
+    } catch (err) {
+      console.error('[Settings] 导入失败:', err)
+      if (err instanceof SyntaxError) {
+        ElMessage.error('文件格式错误，请选择有效的 JSON 文件')
+      } else {
+        ElMessage.error(err.message || '导入失败')
+      }
     }
   }
   reader.readAsText(file.raw)
@@ -684,6 +1350,95 @@ function clearAllData() {
     font-size: 12px;
     color: var(--text-regular);
     transition: color 0.2s ease;
+  }
+}
+
+// ---- 提醒管理样式 ----
+.reminder-section {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  .reminder-card {
+    .empty-hint {
+      color: var(--text-secondary);
+      font-size: 14px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .reminder-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+
+      .reminder-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 16px;
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+
+        .reminder-info {
+          flex: 1;
+          min-width: 0;
+
+          .reminder-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            display: block;
+            margin-bottom: 4px;
+          }
+
+          .reminder-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+          }
+        }
+      }
+    }
+
+    .auto-remind-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+
+      .auto-remind-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 16px;
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+
+        .note-info {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .note-name {
+            font-size: 14px;
+            color: var(--text-primary);
+          }
+        }
+
+        .note-remind-controls {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .advance-hint {
+            font-size: 12px;
+            color: var(--text-secondary);
+          }
+        }
+      }
+    }
   }
 }
 </style>

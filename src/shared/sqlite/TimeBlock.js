@@ -341,11 +341,11 @@ class TimeBlockModel {
     const conditions = ['tb.user_id = ?', 'tb.deleted_at IS NULL']
     const values = [userId]
 
-    // 关键词搜索（标题 + 描述）
+    // 关键词搜索（标题 + 描述 + 便签名称）
     if (keyword && keyword.trim()) {
-      conditions.push('(tb.title LIKE ? OR tb.description LIKE ?)')
+      conditions.push('(tb.title LIKE ? OR tb.description LIKE ? OR n.name LIKE ?)')
       const kw = `%${keyword.trim()}%`
-      values.push(kw, kw)
+      values.push(kw, kw, kw)
     }
 
     if (startDate) {

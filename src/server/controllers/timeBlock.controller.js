@@ -85,7 +85,8 @@ async function search(req, res, next) {
     if (keyword) {
       where[Op.or] = [
         { title: { [Op.like]: `%${keyword}%` } },
-        { description: { [Op.like]: `%${keyword}%` } }
+        { description: { [Op.like]: `%${keyword}%` } },
+        { '$note.name$': { [Op.like]: `%${keyword}%` } }
       ]
     }
 

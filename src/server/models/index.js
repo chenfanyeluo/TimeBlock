@@ -1,6 +1,7 @@
 ﻿const User = require('./User')
 const Note = require('./Note')
 const TimeBlock = require('./TimeBlock')
+const Reminder = require('./Reminder')
 const SyncLog = require('./SyncLog')
 const Statistic = require('./Statistic')
 
@@ -74,10 +75,33 @@ Statistic.belongsTo(Note, {
   as: 'note'
 })
 
+// User  Reminder (一对多)
+User.hasMany(Reminder, {
+  foreignKey: 'user_id',
+  as: 'reminders',
+  onDelete: 'CASCADE'
+})
+Reminder.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user'
+})
+
+// Note  Reminder (一对多, 通过 note_id, 用于自动提醒记录)
+Note.hasMany(Reminder, {
+  foreignKey: 'note_id',
+  as: 'noteReminders',
+  onDelete: 'SET NULL'
+})
+Reminder.belongsTo(Note, {
+  foreignKey: 'note_id',
+  as: 'note'
+})
+
 module.exports = {
   User,
   Note,
   TimeBlock,
+  Reminder,
   SyncLog,
   Statistic
 }

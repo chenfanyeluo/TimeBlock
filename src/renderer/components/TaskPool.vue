@@ -76,7 +76,7 @@
             <el-input v-model="newNote.name" placeholder="例如：工作、学习、运动" />
           </el-form-item>
           <el-form-item label="颜色">
-            <el-color-picker v-model="newNote.color" show-alpha />
+            <el-color-picker v-model="newNote.color" />
           </el-form-item>
           <el-form-item label="默认时长">
             <el-select v-model="newNote.duration" placeholder="选择时长">
@@ -101,7 +101,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { Delete, Plus, Tickets } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@utils/message'
 import { useTimeBlockStore } from '@stores/timeBlock'
 
 const emit = defineEmits(['dragstart', 'recycle-block', 'note-click', 'mobile-drag-start', 'mobile-drag-move', 'mobile-drag-end'])

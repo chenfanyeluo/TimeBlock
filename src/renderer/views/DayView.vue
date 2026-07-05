@@ -64,6 +64,8 @@
               <el-option label="30分" :value="30" />
               <el-option label="1时" :value="60" />
             </el-select>
+            <!-- 移动端搜索按钮 -->
+            <el-button size="small" :icon="Search" circle @click="openSearch" class="mobile-search-btn" />
           </div>
         </template>
         
@@ -120,6 +122,8 @@
               <el-option label="30分钟" :value="30" />
               <el-option label="1小时" :value="60" />
             </el-select>
+            <!-- 搜索按钮 -->
+            <el-button size="small" :icon="Search" circle @click="openSearch" title="搜索时间块" />
           </div>
         </template>
       </div>
@@ -254,6 +258,7 @@
             :multi-index="layout.colIndex"
             :multi-total="layout.totalCols"
             :selected="selectedBlockId === layout.block.id"
+            :has-reminder="reminderBlockIds.has(layout.block.id)"
             @update="(updates) => updateBlock(layout.block.id, updates)"
             @delete="deleteBlock(layout.block.id)"
             @select="onBlockSelect"
@@ -301,6 +306,9 @@
               <el-icon><Calendar /></el-icon> 移动到其他日期
             </div>
             <div class="context-menu-divider"></div>
+            <div class="context-menu-item" @click="onContextAction('reminder')">
+              <el-icon><Bell /></el-icon> 设置提醒
+            </div>
             <div class="context-menu-item danger" @click="onContextAction('delete')">
               <el-icon><Delete /></el-icon> 删除
             </div>
@@ -372,23 +380,324 @@
         <el-button type="primary" @click="confirmMoveDate">确定移动</el-button>
       </template>
     </el-dialog>
+
+    <!-- 提醒设置对话框 -->
+    <el-dialog v-model="reminderDialogVisible" title="设置提醒" width="400px">
+      <el-form label-width="100px">
+        <el-form-item label="时间块">
+          <span>{{ reminderTargetBlock?.noteName || reminderTargetBlock?.taskName }}</span>
+        </el-form-item>
+        <el-form-item label="开始时间">
+          <span>{{ reminderTargetBlock?.date }} {{ reminderTargetBlock?.startTime }}</span>
+        </el-form-item>
+        <el-form-item label="提前提醒">
+          <el-select v-model="reminderAdvanceMinutes" placeholder="选择提前时间" style="width: 100%">
+            <el-option label="5 分钟" :value="5" />
+            <el-option label="10 分钟" :value="10" />
+            <el-option label="15 分钟" :value="15" />
+            <el-option label="30 分钟" :value="30" />
+            <el-option label="1 小时" :value="60" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="reminderNoteAutoRemind" label="便签提醒">
+          <el-alert type="info" :closable="false" style="margin-bottom: 8px">
+            该便签已开启自动提醒（提前 {{ reminderNoteDefaultMinutes }} 分钟）
+          </el-alert>
+        </el-form-item>
+        <el-form-item v-if="reminderExisting" label="当前状态">
+          <el-tag type="warning">已设置提醒（提前 {{ reminderExisting?.advance_minutes }} 分钟）</el-tag>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button v-if="reminderExisting" type="warning" @click="cancelReminder">取消提醒</el-button>
+        <el-button @click="reminderDialogVisible = false">关闭</el-button>
+        <el-button type="primary" @click="saveReminder" :loading="savingReminder">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 搜索对话框 -->
+    <el-dialog v-model="showSearchDialog" title="搜索时间块" width="500px">
+      <el-input
+        v-model="searchKeyword"
+        placeholder="输入关键字搜索标题或备注"
+        :prefix-icon="Search"
+        clearable
+        @input="handleSearchInput"
+        @keyup.enter="handleSearch"
+        @clear="handleSearch"
+        style="margin-bottom: 16px"
+      >
+        <template #append>
+          <el-button :icon="Search" @click="handleSearch" :loading="searching" />
+        </template>
+      </el-input>
+
+      <!-- 搜索结果列表 -->
+      <div v-if="searchResults.length > 0" class="search-results">
+        <div class="search-source-info">搜索来源：{{ searchSource }}</div>
+        <div
+          v-for="item in searchResults"
+          :key="item.id + '-' + item.source"
+          class="search-result-item"
+          :class="{ 'cloud-item': item.source === '云端' }"
+          @click="jumpToResult(item)"
+        >
+          <div class="result-header">
+            <span class="result-title">{{ item.title }}</span>
+            <el-tag v-if="item.note" size="small" :color="item.note.color" style="color: #fff">
+              {{ item.note.name }}
+            </el-tag>
+            <el-tag v-if="item.source" size="small" :type="item.source === '本地' ? 'success' : 'warning'">
+              {{ item.source }}
+            </el-tag>
+          </div>
+          <div class="result-meta">
+            <span class="result-date">{{ dayjs(item.startTime).format('YYYY-MM-DD HH:mm') }}</span>
+            <span class="result-desc" v-if="item.description">{{ item.description }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="searchKeyword && !searching" class="search-empty">
+        <p>未找到匹配的时间块</p>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   ArrowLeft, ArrowRight, Delete, Plus, Clock,
-  DArrowLeft, DArrowRight, Edit, CopyDocument, Brush, Calendar
+  DArrowLeft, DArrowRight, Edit, CopyDocument, Brush, Calendar, Search, Bell
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { ElMessage } from '@utils/message'
 import dayjs from 'dayjs'
 import TimeBlockItem from '@components/TimeBlockItem.vue'
 import TaskPool from '@components/TaskPool.vue'
 import { useTimeBlockStore } from '@stores/timeBlock'
-import { platformInfo } from '@shared/platform'
+import { platformInfo, database } from '@shared/platform'
+import { searchTimeBlocks } from '@api/timeBlock'
+import authApi from '@api/auth'
+import { createTimeBlockReminder, cancelTimeBlockReminder, checkNoteAutoRemind, getTimeBlockReminder, getPendingReminders } from '../services/reminder'
 
 const store = useTimeBlockStore()
+
+// ---- 提醒状态 ----
+const reminderBlockIds = ref(new Set()) // 存储有提醒的时间块ID
+
+// 加载当日提醒状态(包括单独设置的和便签自动提醒的)
+async function loadReminderStatus() {
+  if (!platformInfo.isElectron && !platformInfo.isCapacitor) return
+  if (!database.isReady()) return
+
+  try {
+    // 1. 查询单独设置提醒的时间块
+    const reminders = await database.query(
+      `SELECT target_id FROM reminders WHERE user_id = 1 AND target_type = 'time_block' AND status = 'pending';`,
+      []
+    )
+    const manualReminderBlockIds = reminders.map(r => r.target_id)
+
+    // 2. 查询开启自动提醒的便签
+    const autoRemindNotes = await database.query(
+      `SELECT id FROM notes WHERE user_id = 1 AND auto_remind = 1 AND deleted_at IS NULL;`,
+      []
+    )
+    const autoRemindNoteIds = autoRemindNotes.map(n => n.id)
+
+    // 3. 查询属于这些便签的今日时间块(即使没有单独设置提醒)
+    let autoReminderBlockIds = []
+    if (autoRemindNoteIds.length > 0) {
+      const today = currentDate.value
+      const autoRemindBlocks = await database.query(
+        `SELECT id FROM time_blocks
+         WHERE user_id = 1
+         AND note_id IN (${autoRemindNoteIds.map(() => '?').join(',')})
+         AND date(start_time) = ?
+         AND deleted_at IS NULL;`,
+        [...autoRemindNoteIds, today]
+      )
+      autoReminderBlockIds = autoRemindBlocks.map(b => b.id)
+    }
+
+    // 4. 合并两种提醒来源
+    const allReminderBlockIds = new Set([...manualReminderBlockIds, ...autoReminderBlockIds])
+    reminderBlockIds.value = allReminderBlockIds
+
+    console.log('[DayView] 加载提醒状态:', allReminderBlockIds.size, '个')
+    console.log('[DayView] - 手动设置:', manualReminderBlockIds.length, '个')
+    console.log('[DayView] - 便签自动:', autoReminderBlockIds.length, '个')
+  } catch (err) {
+    console.warn('[DayView] 加载提醒状态失败:', err)
+  }
+}
+
+// ---- 搜索功能 ----
+const showSearchDialog = ref(false)
+const searchKeyword = ref('')
+const searchResults = ref([])
+const searching = ref(false)
+const searchSource = ref('') // 搜索来源标识
+
+// 搜索防抖定时器
+let searchDebounceTimer = null
+const SEARCH_DEBOUNCE_MS = 300
+
+// 打开搜索对话框
+function openSearch() {
+  showSearchDialog.value = true
+  searchKeyword.value = ''
+  searchResults.value = []
+  searchSource.value = ''
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
+}
+
+// 实时搜索输入（防抖）
+function handleSearchInput() {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  searchDebounceTimer = setTimeout(() => {
+    handleSearch()
+  }, SEARCH_DEBOUNCE_MS)
+}
+
+// 执行搜索（本地 SQLite + 云端 API）
+async function handleSearch() {
+  if (!searchKeyword.value.trim()) {
+    searchResults.value = []
+    return
+  }
+
+  searching.value = true
+  searchResults.value = []
+  searchSource.value = ''
+
+  const keyword = searchKeyword.value.trim().toLowerCase()
+
+  try {
+    // 1. 搜索本地 SQLite（Electron/Capacitor 环境）
+    if (platformInfo.isElectron || platformInfo.isCapacitor) {
+      if (database.isReady()) {
+        const localResults = await database.query(
+          `SELECT tb.id, tb.title, tb.description, tb.start_time, tb.end_time,
+                  n.name AS note_name, n.color AS note_color
+           FROM time_blocks tb
+           LEFT JOIN notes n ON tb.note_id = n.id AND n.deleted_at IS NULL
+           WHERE tb.user_id = 1 AND tb.deleted_at IS NULL
+             AND (tb.title LIKE ? OR tb.description LIKE ? OR n.name LIKE ?)
+           ORDER BY tb.start_time DESC
+           LIMIT 50;`,
+          [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`]
+        )
+
+        if (localResults.length > 0) {
+          searchResults.value = localResults.map(tb => ({
+            id: tb.id,
+            title: tb.title,
+            description: tb.description,
+            startTime: tb.start_time,
+            endTime: tb.end_time,
+            note: tb.note_name ? { name: tb.note_name, color: tb.note_color || '#909399' } : null,
+            source: '本地数据库'
+          }))
+          searchSource.value = '本地数据库'
+          console.log('[DayView] 本地 SQLite 搜索结果:', localResults.length)
+        }
+      }
+    }
+
+    // 2. 搜索本地内存数据（Web 环境备选方案，无需登录）
+    if (searchResults.value.length === 0) {
+      const memoryResults = store.blocks.filter(block => {
+        const titleMatch = block.title?.toLowerCase().includes(keyword)
+        const descMatch = (block.remark || block.description || '')?.toLowerCase().includes(keyword)
+        const noteMatch = (block.noteName || '')?.toLowerCase().includes(keyword)
+        return titleMatch || descMatch || noteMatch
+      })
+
+      if (memoryResults.length > 0) {
+        searchResults.value = memoryResults.map(tb => {
+          // 24:00 结束 → 转为次日 00:00（与 frontendBlockToDb 一致）
+          let endTimeValue
+          if (tb.endTime === '24:00') {
+            const nextDate = dayjs(tb.date).add(1, 'day').format('YYYY-MM-DD')
+            endTimeValue = `${nextDate}T00:00:00`
+          } else {
+            endTimeValue = `${tb.date}T${tb.endTime}:00`
+          }
+          return {
+            id: tb.id,
+            title: tb.title,
+            description: tb.remark || tb.description || '',
+            startTime: `${tb.date}T${tb.startTime}:00`,
+            endTime: endTimeValue,
+            note: { name: tb.noteName || '未分类', color: tb.noteColor || '#909399' },
+            source: '当前页面'
+          }
+        })
+        searchSource.value = '当前页面'
+        console.log('[DayView] 内存搜索结果:', memoryResults.length)
+      }
+    }
+
+    // 3. 如果已登录，同时搜索云端
+    if (authApi.checkLogin()) {
+      try {
+        const cloudResults = await searchTimeBlocks({ keyword: searchKeyword.value.trim() })
+
+        // 合并云端结果（避免重复）
+        for (const cloudItem of cloudResults) {
+          const existsLocal = searchResults.value.some(
+            local => local.title === cloudItem.title &&
+                     local.startTime === cloudItem.startTime
+          )
+
+          if (!existsLocal) {
+            searchResults.value.push({
+              ...cloudItem,
+              source: '云端'
+            })
+          }
+        }
+
+        if (cloudResults.length > 0 && searchSource.value === '') {
+          searchSource.value = '云端'
+        }
+        console.log('[DayView] 云端搜索结果:', cloudResults.length)
+
+      } catch (cloudErr) {
+        console.warn('[DayView] 云端搜索失败:', cloudErr.message)
+      }
+    }
+
+    // 最终提示
+    if (searchResults.value.length === 0) {
+      ElMessage.info('未找到匹配的时间块')
+    } else {
+      ElMessage.success(`找到 ${searchResults.value.length} 个匹配结果（${searchSource.value}）`)
+    }
+
+  } catch (err) {
+    console.error('[DayView] 搜索失败:', err)
+    ElMessage.error(err.message || '搜索失败')
+  } finally {
+    searching.value = false
+  }
+}
+
+// 点击搜索结果跳转到对应日期
+function jumpToResult(item) {
+  const date = dayjs(item.startTime).format('YYYY-MM-DD')
+  store.currentDate = dayjs(date)
+  showSearchDialog.value = false
+  ElMessage.success(`已跳转到 ${date}`)
+}
 
 // ---- 时间粒度设置 ----
 const granularityValue = computed({
@@ -453,6 +762,11 @@ const dayGridRef = ref(null)
 const timelineRef = ref(null)
 const scrollBodyRef = ref(null)
 
+// 监听日期变化,刷新提醒状态
+watch(currentDate, () => {
+  loadReminderStatus()
+})
+
 // 对话框状态
 const dialogVisible = ref(false)
 const dialogTitle = ref('新建时间块')
@@ -461,6 +775,109 @@ const editingBlockId = ref(null)
 const moveDateDialogVisible = ref(false)
 const moveTargetDate = ref('')
 const moveTargetBlockId = ref(null)
+
+// ---- 提醒设置功能 ----
+const reminderDialogVisible = ref(false)
+const reminderTargetBlock = ref(null)
+const reminderAdvanceMinutes = ref(5)
+const reminderExisting = ref(null)
+const reminderNoteAutoRemind = ref(false)
+const reminderNoteDefaultMinutes = ref(5)
+const savingReminder = ref(false)
+
+// 打开提醒设置对话框
+async function openReminderDialog(block) {
+  reminderTargetBlock.value = block
+  reminderAdvanceMinutes.value = 5
+  reminderExisting.value = null
+  reminderNoteAutoRemind.value = false
+  reminderNoteDefaultMinutes.value = 5
+
+  // 检查是否已设置提醒
+  if (platformInfo.isElectron || platformInfo.isCapacitor) {
+    if (database.isReady()) {
+      const existing = await getTimeBlockReminder(block.id)
+      reminderExisting.value = existing
+      if (existing) {
+        reminderAdvanceMinutes.value = existing.advance_minutes
+      }
+
+      // 检查便签是否开启自动提醒
+      if (block.noteId) {
+        const noteConfig = await checkNoteAutoRemind(block.noteId)
+        if (noteConfig && noteConfig.auto_remind === 1) {
+          reminderNoteAutoRemind.value = true
+          reminderNoteDefaultMinutes.value = noteConfig.default_advance_minutes
+        }
+      }
+    }
+  }
+
+  reminderDialogVisible.value = true
+}
+
+// 保存提醒设置
+async function saveReminder() {
+  if (!reminderTargetBlock.value) return
+
+  savingReminder.value = true
+  try {
+    // 先取消已有提醒
+    await cancelTimeBlockReminder(reminderTargetBlock.value.id)
+
+    // 创建新提醒
+    const result = await createTimeBlockReminder(
+      reminderTargetBlock.value,
+      reminderAdvanceMinutes.value,
+      false, // 手动设置
+      reminderTargetBlock.value.noteId
+    )
+
+    if (result) {
+      ElMessage.success(`提醒已设置（提前 ${reminderAdvanceMinutes.value} 分钟）`)
+      reminderExisting.value = { advance_minutes: reminderAdvanceMinutes.value }
+
+      // ✅ 同步UI状态：添加到提醒集合
+      reminderBlockIds.value.add(reminderTargetBlock.value.id)
+      console.log('[DayView] 提醒已添加到UI状态:', reminderTargetBlock.value.id)
+    } else {
+      ElMessage.warning('提醒时间已过去，无法设置')
+    }
+  } catch (err) {
+    console.error('[DayView] 设置提醒失败:', err)
+    ElMessage.error('设置提醒失败')
+  } finally {
+    savingReminder.value = false
+  }
+}
+
+// 取消提醒
+async function cancelReminder() {
+  if (!reminderTargetBlock.value) return
+
+  try {
+    await ElMessageBox.confirm('确定取消该时间块的提醒？', '取消提醒', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+
+    await cancelTimeBlockReminder(reminderTargetBlock.value.id)
+    ElMessage.success('提醒已取消')
+    reminderExisting.value = null
+
+    // ✅ 同步UI状态：从提醒集合中移除
+    reminderBlockIds.value.delete(reminderTargetBlock.value.id)
+    console.log('[DayView] 提醒已从UI状态移除:', reminderTargetBlock.value.id)
+
+    reminderDialogVisible.value = false
+  } catch (err) {
+    if (err !== 'cancel') {
+      console.error('[DayView] 取消提醒失败:', err)
+      ElMessage.error('取消提醒失败')
+    }
+  }
+}
 
 // 表单数据
 const newBlock = ref({
@@ -675,6 +1092,9 @@ async function onContextAction(action, data) {
       moveTargetDate.value = block.date
       moveDateDialogVisible.value = true
       break
+    case 'reminder':
+      openReminderDialog(block)
+      break
     case 'delete':
       try {
         await ElMessageBox.confirm(`确认删除「${block.noteName || block.taskName}」？`, '删除确认', {
@@ -814,14 +1234,18 @@ function timeToMinutes(timeStr) {
 }
 
 function minutesToTime(minutes) {
+  // 特殊处理：1440分钟 = 24:00（允许结束时间为24:00）
+  if (minutes >= 1440) return '24:00'
   const h = Math.floor(Math.max(0, minutes) / 60)
   const m = Math.max(0, minutes) % 60
   return `${String(Math.min(23, h)).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-function snapToGrid(minutes) {
+function snapToGrid(minutes, maxMinutes = 1440) {
   const granularity = store.timeGranularity
-  return Math.round(Math.max(0, minutes) / granularity) * granularity
+  // 先限制在有效范围内，再对齐网格
+  const clamped = Math.max(0, Math.min(maxMinutes, minutes))
+  return Math.round(clamped / granularity) * granularity
 }
 
 function getHourTop(hour) {
@@ -918,18 +1342,22 @@ function handleGridDoubleClick(e) {
   }
 }
 
-function confirmAddBlock() {
+async function confirmAddBlock() {
   const dateStr = currentDate.value
 
   if (dialogMode.value === 'edit' && editingBlockId.value) {
     store.updateBlock(editingBlockId.value, { ...newBlock.value })
     ElMessage.success('已更新时间块')
+    // 更新时间块后刷新提醒状态(便签可能开启自动提醒)
+    await loadReminderStatus()
   } else {
     store.addBlock({
       ...newBlock.value,
       date: dateStr
     })
     ElMessage.success('已创建时间块')
+    // 创建时间块后刷新提醒状态(便签可能开启自动提醒)
+    await loadReminderStatus()
   }
   dialogVisible.value = false
 }
@@ -1063,17 +1491,49 @@ function finishCreate() {
   // 重要：确保抑制接下来的 click 事件（防止 cancelPendingAndActive 被触发）
   _suppressNextClick = true
 
-  // 转换为分钟
-  const startMinutes = snapToGrid((minY / hourHeight) * 60)
-  const endMinutes = snapToGrid((maxY / hourHeight) * 60)
-  const clampedStart = Math.max(0, Math.min(1380, startMinutes))
-  let clampedEnd = Math.max(clampedStart + store.timeGranularity, Math.min(1440, endMinutes))
+  // 步骤1：计算原始分钟值（不对齐网格，保留用户意图）
+  const rawStartMinutes = (minY / hourHeight) * 60
+  const rawEndMinutes = (maxY / hourHeight) * 60
+  const rawDuration = rawEndMinutes - rawStartMinutes
+
+  // 步骤2：先截断到有效边界（0-1440），保留用户意图时长
+  let boundedStart = Math.max(0, rawStartMinutes)
+  let boundedEnd = Math.min(1440, rawEndMinutes)
+
+  // 步骤3：如果截断后时长太小（小于粒度），整体移动到边界处
+  // 这是唯一允许改变用户意图的情况
+  if (boundedEnd - boundedStart < store.timeGranularity) {
+    // 判断靠近哪个边界
+    if (rawStartMinutes < store.timeGranularity) {
+      // 靠近上边界：固定在顶部
+      boundedStart = 0
+      boundedEnd = store.timeGranularity
+    } else {
+      // 靠近下边界：固定在底部
+      boundedStart = 1440 - store.timeGranularity
+      boundedEnd = 1440
+    }
+  }
+
+  // 步骤4：最后才对齐网格（在截断后的有效范围内对齐）
+  let clampedStart = snapToGrid(boundedStart)
+  let clampedEnd = snapToGrid(boundedEnd)
+
+  // 步骤5：确保最终时长至少一个粒度（网格对齐可能使时长变短）
+  // 但只扩大结束时间，不移动开始位置，且结束时间要对齐到网格
+  if (clampedEnd - clampedStart < store.timeGranularity) {
+    clampedEnd = snapToGrid(clampedStart + store.timeGranularity)
+    // 如果扩大后超出边界，固定到边界
+    if (clampedEnd > 1440) {
+      clampedEnd = 1440
+    }
+  }
 
   // 重置创建状态
   isCreating.value = false
 
   // 使用 requestAnimationFrame 延迟设置 pendingBlock，确保 click 事件已被处理
-  requestAnimationFrame(() => {
+  requestAnimationFrame(async () => {
     // 判断是否有激活便签
     if (activeNoteId.value) {
       // 有激活便签：直接创建时间块
@@ -1092,6 +1552,8 @@ function finishCreate() {
         ElMessage.success(`已创建 "${activeNote.name}" (${minutesToTime(clampedStart)}-${minutesToTime(clampedEnd)})`)
         // 创建后取消激活状态
         activeNoteId.value = null
+        // 创建时间块后刷新提醒状态(便签可能开启自动提醒)
+        await loadReminderStatus()
       }
     } else {
       // 无激活便签：进入暂时填入状态，等待用户选择便签
@@ -1274,37 +1736,14 @@ function onMobileBlockDragMove(data) {
 }
 
 /**
- * 移动端：时间块拖拽结束，在便签栏区域回收
+ * 移动端：时间块拖拽结束，清理拖拽状态
+ * （实际的时间轴重定位 / 便签栏回收已由 TimeBlockItem 内部通过 update / recycle 事件处理）
  */
 function onMobileBlockDragEnd(data) {
   if (!mobileBlockDragState.value.active) return
 
-  const { block, clientX, clientY, categoryColor, categoryName } = data
-
   // 关闭上下文菜单（修复拖拽结束后菜单依旧存在的问题）
   hideContextMenu()
-
-  // 检测是否在便签栏区域上方
-  const poolEl = taskPoolRef.value?.$el || document.querySelector('.task-pool')
-  let recycled = false
-
-  if (poolEl) {
-    const poolRect = poolEl.getBoundingClientRect()
-    const overPool = clientX >= poolRect.left && clientX <= poolRect.right &&
-                     clientY >= poolRect.top && clientY <= poolRect.bottom
-
-    if (overPool && block) {
-      // 回收时间块到便签栏
-      taskPoolRef.value?.recycleTask(categoryName || block.noteName || block.taskName, categoryColor || block.noteColor)
-      // 删除时间块
-      deleteBlock(block.id)
-      if (selectedBlockId.value === block.id) {
-        selectedBlockId.value = null
-      }
-      ElMessage.success(`"${categoryName || block.noteName || block.taskName}"已回收到便签栏`)
-      recycled = true
-    }
-  }
 
   // 重置拖拽状态
   mobileBlockDragState.value = {
@@ -1322,20 +1761,77 @@ function onMobileBlockDragEnd(data) {
 const createPreviewStyle = computed(() => {
   const minY = Math.min(createStartY.value, createCurrentY.value)
   const maxY = Math.max(createStartY.value, createCurrentY.value)
+
+  // 与 finishCreate 保持一致的逻辑：先截断，再对齐网格
+  const rawStartMinutes = (minY / hourHeight) * 60
+  const rawEndMinutes = (maxY / hourHeight) * 60
+
+  let boundedStart = Math.max(0, rawStartMinutes)
+  let boundedEnd = Math.min(1440, rawEndMinutes)
+
+  // 如果截断后时长太小，整体移动到边界
+  if (boundedEnd - boundedStart < store.timeGranularity) {
+    if (rawStartMinutes < store.timeGranularity) {
+      boundedStart = 0
+      boundedEnd = store.timeGranularity
+    } else {
+      boundedStart = 1440 - store.timeGranularity
+      boundedEnd = 1440
+    }
+  }
+
+  // 对齐网格
+  let previewStart = snapToGrid(boundedStart)
+  let previewEnd = snapToGrid(boundedEnd)
+
+  // 确保最小时长
+  if (previewEnd - previewStart < store.timeGranularity) {
+    previewEnd = snapToGrid(previewStart + store.timeGranularity)
+    if (previewEnd > 1440) previewEnd = 1440
+  }
+
+  // 转换回像素位置
+  const previewMinY = (previewStart / 60) * hourHeight
+  const previewMaxY = (previewEnd / 60) * hourHeight
+
   return {
-    top: minY + 'px',
+    top: previewMinY + 'px',
     left: '8px',
     right: '8px',
-    height: (maxY - minY) + 'px'
+    height: (previewMaxY - previewMinY) + 'px'
   }
 })
 
 const createPreviewText = computed(() => {
   const minY = Math.min(createStartY.value, createCurrentY.value)
   const maxY = Math.max(createStartY.value, createCurrentY.value)
-  const startMin = snapToGrid((minY / hourHeight) * 60)
-  const endMin = snapToGrid((maxY / hourHeight) * 60)
-  return `${minutesToTime(startMin)} ~ ${minutesToTime(endMin)}`
+
+  // 与 finishCreate 保持一致的逻辑
+  const rawStartMinutes = (minY / hourHeight) * 60
+  const rawEndMinutes = (maxY / hourHeight) * 60
+
+  let boundedStart = Math.max(0, rawStartMinutes)
+  let boundedEnd = Math.min(1440, rawEndMinutes)
+
+  if (boundedEnd - boundedStart < store.timeGranularity) {
+    if (rawStartMinutes < store.timeGranularity) {
+      boundedStart = 0
+      boundedEnd = store.timeGranularity
+    } else {
+      boundedStart = 1440 - store.timeGranularity
+      boundedEnd = 1440
+    }
+  }
+
+  let previewStart = snapToGrid(boundedStart)
+  let previewEnd = snapToGrid(boundedEnd)
+
+  if (previewEnd - previewStart < store.timeGranularity) {
+    previewEnd = snapToGrid(previewStart + store.timeGranularity)
+    if (previewEnd > 1440) previewEnd = 1440
+  }
+
+  return `${minutesToTime(previewStart)} ~ ${minutesToTime(previewEnd)}`
 })
 
 // 暂时填入预览块样式
@@ -1453,7 +1949,7 @@ const dropIndicatorStyle = computed(() => ({
  * @param {Object} note - 便签对象
  * @param {MouseEvent} event - 鼠标事件（用于检测复合键）
  */
-function handleNoteClick(note, event) {
+async function handleNoteClick(note, event) {
   // 移动端：直接激活便签（无需复合键）
   // PC端：需要 Ctrl/Alt/Shift 复合键才能激活
   const shouldActivate = isMobileDevice.value ||
@@ -1475,6 +1971,8 @@ function handleNoteClick(note, event) {
     pendingBlock.value = null
     // 创建后取消激活状态（根据用户需求）
     activeNoteId.value = null
+    // 创建时间块后刷新提醒状态(便签可能开启自动提醒)
+    await loadReminderStatus()
     return
   }
 
@@ -1606,6 +2104,9 @@ onMounted(() => {
   // 检查移动端提示状态
   checkMobileHint()
 
+  // 加载提醒状态
+  loadReminderStatus()
+
   // 启动当前时间定时更新
   updateCurrentTimeLine()
   currentTimeTimer = setInterval(updateCurrentTimeLine, 30000) // 30秒更新
@@ -1639,6 +2140,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (currentTimeTimer) clearInterval(currentTimeTimer)
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   document.removeEventListener('keydown', handleKeyDown)
   document.removeEventListener('click', handleGlobalClick)
   window.removeEventListener('resize', handleResize)
@@ -2555,5 +3057,90 @@ onBeforeUnmount(() => {
       }
     }
   }
+}
+
+// ---- 搜索功能样式 ----
+.search-source-info {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+.search-results {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 8px;
+
+  .search-result-item {
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--bg-hover-soft);
+      transform: translateX(4px);
+    }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    // 云端结果样式区分
+    &.cloud-item {
+      border: 1px dashed var(--warning-color);
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+
+      .result-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+      }
+    }
+
+    .result-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+
+      .result-date {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .result-desc {
+        font-size: 11px;
+        color: var(--text-regular);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+}
+
+.search-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.mobile-search-btn {
+  margin-left: 8px;
 }
 </style>

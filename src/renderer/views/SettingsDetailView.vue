@@ -101,12 +101,21 @@
       <div v-if="currentKey === 'notes'" class="setting-section">
         <div class="notes-list">
           <div
-            v-for="note in notes"
+            v-for="note in localNotes"
             :key="note.id"
             class="note-item"
           >
-            <el-color-picker v-model="note.color" size="small" />
-            <el-input v-model="note.name" size="small" class="note-name-input" />
+            <el-color-picker
+              v-model="note.color"
+              size="small"
+              @change="(val) => updateNoteInfo(note.id, { color: val })"
+            />
+            <el-input
+              v-model="note.name"
+              size="small"
+              class="note-name-input"
+              @blur="(e) => updateNoteInfo(note.id, { name: e.target.value })"
+            />
             <el-button
               type="danger"
               size="small"
@@ -130,6 +139,75 @@
               <el-radio-button label="record">记录</el-radio-button>
               <el-radio-button label="stats">统计</el-radio-button>
             </el-radio-group>
+          </div>
+        </div>
+
+        <!-- 提醒管理区域 -->
+        <div class="reminder-section" v-loading="loadingReminders">
+          <!-- 时间块提醒 -->
+          <div class="reminder-card">
+            <h4 class="section-label">时间块提醒</h4>
+            <div v-if="reminderTimeBlocks.length === 0" class="empty-hint">
+              暂无设置了提醒的时间块
+            </div>
+            <div v-else class="reminder-list">
+              <div
+                v-for="reminder in reminderTimeBlocks"
+                :key="reminder.id"
+                class="reminder-item"
+              >
+                <div class="reminder-info">
+                  <span class="reminder-title">{{ reminder.title }}</span>
+                  <span class="reminder-time">{{ new Date(reminder.remind_at).toLocaleString() }}</span>
+                </div>
+                <el-button
+                  type="danger"
+                  size="small"
+                  @click="cancelReminder(reminder)"
+                >
+                  取消
+                </el-button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 便签自动提醒 -->
+          <div class="reminder-card">
+            <h4 class="section-label">便签自动提醒</h4>
+            <div v-if="localNotes.length === 0" class="empty-hint">
+              暂无便签
+            </div>
+            <div v-else class="auto-remind-list">
+              <div
+                v-for="note in localNotes"
+                :key="note.id"
+                class="auto-remind-item"
+              >
+                <div class="note-info">
+                  <el-color-picker v-model="note.color" size="small" disabled />
+                  <span class="note-name">{{ note.name }}</span>
+                </div>
+                <div class="note-remind-controls">
+                  <el-input-number
+                    v-if="note.auto_remind === 1"
+                    :model-value="note.default_advance_minutes || 5"
+                    @change="(val) => toggleNoteAutoRemind(note.id, true, val)"
+                    :min="1"
+                    :max="60"
+                    size="small"
+                    style="width: 80px"
+                  />
+                  <span v-if="note.auto_remind === 1" class="advance-hint">分钟前提醒</span>
+                  <el-switch
+                    :model-value="note.auto_remind === 1"
+                    @change="(val) => toggleNoteAutoRemind(note.id, val, note.default_advance_minutes || 5)"
+                    inline-prompt
+                    active-text="开"
+                    inactive-text="关"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -219,10 +297,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, Delete, Plus, Download, Upload } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { getTimeBlockReminder, cancelTimeBlockReminder, getPendingReminders } from '../services/reminder'
+import { ElMessageBox } from 'element-plus'
+import { ElMessage } from '@utils/message'
 import { useTimeBlockStore } from '@stores/timeBlock'
 
 const router = useRouter()
@@ -263,6 +343,9 @@ const pendingCount = ref(0)
 // 监听网络状态
 window.addEventListener('online', () => { isOnline.value = true })
 window.addEventListener('offline', () => { isOnline.value = false })
+
+// 初始化加载提醒数据
+loadReminders()
 
 const accountForm = ref({
   email: '',
@@ -337,7 +420,66 @@ async function handleAnimationChange(val) {
   ElMessage.success(val ? 'UI 动画已开启' : 'UI 动画已关闭（性能模式）')
 }
 
-const notes = computed(() => store.notes)
+// 便签数据：使用 watch 确保响应式更新
+const localNotes = ref([])
+
+// 监听 store.notes 的变化，确保界面及时同步
+const stopWatchNotes = watch(
+  () => store.notes,
+  (newNotes) => {
+    localNotes.value = [...newNotes]  // 创建新数组触发响应式更新
+  },
+  { immediate: true, deep: true }
+)
+
+// 组件卸载时停止监听
+onUnmounted(() => {
+  stopWatchNotes()
+})
+
+// 提醒管理相关状态
+const reminderTimeBlocks = ref([])
+const loadingReminders = ref(false)
+
+// 加载提醒数据
+async function loadReminders() {
+  loadingReminders.value = true
+  try {
+    const pendingReminders = await getPendingReminders()
+    reminderTimeBlocks.value = pendingReminders.filter(r => r.target_type === 'time_block')
+  } catch (err) {
+    console.error('[SettingsDetailView] 加载提醒数据失败:', err)
+    ElMessage.error('加载提醒数据失败: ' + (err.message || '未知错误'))
+  } finally {
+    loadingReminders.value = false
+  }
+}
+
+// 取消提醒
+async function cancelReminder(reminder) {
+  try {
+    await cancelTimeBlockReminder(reminder.target_id)
+    ElMessage.success('提醒已取消')
+    await loadReminders()
+  } catch (err) {
+    console.error('[SettingsDetailView] 取消提醒失败:', err)
+    ElMessage.error('取消提醒失败')
+  }
+}
+
+// 开关便签自动提醒
+async function toggleNoteAutoRemind(noteId, enabled, advanceMinutes = 5) {
+  try {
+    await store.updateNote(noteId, {
+      auto_remind: enabled ? 1 : 0,
+      default_advance_minutes: advanceMinutes
+    })
+    ElMessage.success(enabled ? '已开启自动提醒' : '已关闭自动提醒')
+  } catch (err) {
+    console.error('[SettingsDetailView] 设置便签自动提醒失败:', err)
+    ElMessage.error('设置便签自动提醒失败')
+  }
+}
 
 // 数据同步方法
 function syncNow() {
@@ -375,20 +517,20 @@ function updateProfile() {
   ElMessage.success('资料已更新')
 }
 
-function addNote() {
-  const id = `note-${Date.now()}`
-  store.notes.push({
-    id,
+async function addNote() {
+  await store.createNote({
     name: '新便签',
     color: '#909399'
   })
 }
 
-function deleteNote(id) {
-  const idx = store.notes.findIndex(n => n.id === id)
-  if (idx !== -1) {
-    store.notes.splice(idx, 1)
-  }
+async function deleteNote(id) {
+  await store.deleteNote(id)
+}
+
+// 更新便签信息（名称或颜色）
+async function updateNoteInfo(noteId, updates) {
+  await store.updateNote(noteId, updates)
 }
 
 function exportData() {
@@ -720,5 +862,114 @@ function clearAllData() {
 
 .text-secondary {
   color: var(--text-secondary);
+}
+
+// ---- 提醒管理区域样式 ----
+.reminder-section {
+  margin-top: 16px;
+}
+
+// ---- 提醒管理样式 ----
+.reminder-card {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+
+  .section-label {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 0 0 12px 0;
+  }
+
+  .empty-hint {
+    color: var(--text-secondary);
+    font-size: 14px;
+    text-align: center;
+    padding: 16px 0;
+  }
+
+  .reminder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .reminder-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--bg-tertiary);
+      border-radius: 10px;
+
+      .reminder-info {
+        flex: 1;
+        min-width: 0;
+
+        .reminder-title {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--text-primary);
+          display: block;
+          margin-bottom: 4px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .reminder-time {
+          font-size: 12px;
+          color: var(--text-secondary);
+        }
+      }
+    }
+  }
+
+  .auto-remind-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .auto-remind-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--bg-tertiary);
+      border-radius: 10px;
+
+      .note-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 0;
+
+        .note-name {
+          font-size: 14px;
+          color: var(--text-primary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
+
+      .note-remind-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .advance-hint {
+          font-size: 12px;
+          color: var(--text-secondary);
+          white-space: nowrap;
+        }
+      }
+    }
+  }
 }
 </style>

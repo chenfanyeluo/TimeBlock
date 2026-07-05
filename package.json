@@ -7,7 +7,55 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "electron .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:win": "npm run build && cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 electron-builder --win --x64",
+    "build:mac": "npm run build && cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 electron-builder --mac",
+    "build:linux": "npm run build && cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.timeblock.app",
+    "productName": "TimeBlock",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "src/main/**/*",
+      "src/shared/**/*",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "src/assets",
+        "to": "assets",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "src/assets/timeblock_icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "src/assets/timeblock_icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "src/assets/timeblock_icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.0",
@@ -31,6 +79,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.0",
     "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
     "sass": "^1.69.0",
     "vite": "^8.1.3"
   },

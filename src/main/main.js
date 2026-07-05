@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, Notification } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const sqlite = require('../shared/sqlite')
@@ -8,6 +8,11 @@ let mainWindow = null
 
 /** 默认用户 ID（本地单用户模式） */
 const DEFAULT_USER_ID = 1
+
+/** Windows 通知中心应用 ID */
+if (process.platform === 'win32') {
+  app.setAppUserModelId('app.timeblock.desktop')
+}
 
 /**
  * 创建浏览器窗口
@@ -39,30 +44,29 @@ function createWindow() {
  */
 async function initDatabase() {
   try {
-    // 根据打包状态选择数据库路径
     let dbPath
+    let appPath
     
     if (app.isPackaged) {
-      // 生产环境（打包后）：使用应用目录，随应用卸载删除
+      // 生产环境（打包后）：使用应用可执行文件所在目录
       // Windows: 应用exe所在目录\data\timeblock_local.db
-      // macOS: /Applications/TimeBlock.app/Contents/Resources/data/
+      // macOS: /Applications/TimeBlock.app/Contents/MacOS/data/
       // Linux: /opt/TimeBlock/data/
-      const appPath = app.getAppPath()
-      const dataDir = path.join(appPath, 'data')
-      
-      // 确保数据目录存在
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true })
-      }
-      
-      dbPath = path.join(dataDir, 'timeblock_local.db')
-      console.log('[Main] 生产环境 - 应用目录数据库:', dbPath)
+      // ⚠️ 不能使用 app.getAppPath()，因为它返回 asar 归档路径，无法写入
+      appPath = path.dirname(app.getPath('exe'))
     } else {
-      // 开发环境：使用用户数据目录（方便调试，不影响开发时的应用更新）
-      const userDataPath = app.getPath('userData')
-      dbPath = path.join(userDataPath, 'timeblock_local.db')
-      console.log('[Main] 开发环境 - 用户数据目录:', dbPath)
+      // 开发环境：使用项目根目录（与生产环境保持一致，数据库放在应用目录下）
+      appPath = path.join(__dirname, '..', '..')
     }
+    
+    const dataDir = path.join(appPath, 'data')
+    
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true })
+    }
+    
+    dbPath = path.join(dataDir, 'timeblock_local.db')
+    console.log('[Main] 数据库路径:', dbPath, '(', app.isPackaged ? '生产环境' : '开发环境', ')')
     
     // 初始化 SQLite 数据库
     await sqlite.init({ dbPath })
@@ -199,13 +203,26 @@ function registerIPCHandlers() {
     }
   })
 
+  /** 根据 ID 获取便签 */
+  ipcMain.handle('note:getById', async (_event, id) => {
+    try {
+      const note = sqlite.note.findById(id)
+      return { success: true, data: note }
+    } catch (err) {
+      console.error('[IPC] note:getById 失败:', err.message)
+      return { success: false, error: err.message }
+    }
+  })
+
   /** 创建便签 */
   ipcMain.handle('note:create', async (_event, data) => {
     try {
       const note = sqlite.note.create({
         user_id: DEFAULT_USER_ID,
         name: data.name,
-        color: data.color || '#409eff'
+        color: data.color || '#409eff',
+        auto_remind: data.auto_remind !== undefined ? data.auto_remind : 0,
+        default_advance_minutes: data.default_advance_minutes !== undefined ? data.default_advance_minutes : 5
       })
       return { success: true, data: note }
     } catch (err) {
@@ -272,6 +289,128 @@ function registerIPCHandlers() {
       const result = sqlite.exec(sql, params)
       return { success: true, data: result }
     } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // =============================================
+  // 系统通知（Electron 原生通知）
+  // =============================================
+
+  // =============================================
+  // 同步操作
+  // =============================================
+
+  /** 手动触发同步 */
+  ipcMain.handle('sync:start', async () => {
+    try {
+      return { success: true, message: '同步功能需连接后端服务' }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  /** 同步状态监听 — 暂不支持推送，返回默认状态 */
+  ipcMain.handle('sync:status', async () => {
+    return { success: true, data: { status: 'idle', lastSync: null } }
+  })
+
+  // =============================================
+  // 认证操作
+  // =============================================
+
+  /** 用户登录（本地模式） */
+  ipcMain.handle('auth:login', async (_event, credentials) => {
+    try {
+      if (!credentials || !credentials.email) {
+        return { success: false, error: '邮箱不能为空' }
+      }
+      const user = sqlite.user.findByEmail(credentials.email)
+      if (!user) {
+        return { success: false, error: '用户不存在' }
+      }
+      return {
+        success: true,
+        data: {
+          user: { id: user.id, email: user.email, name: user.name, avatar: user.avatar },
+          accessToken: 'local-token'
+        }
+      }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  /** 用户登出 */
+  ipcMain.handle('auth:logout', async () => {
+    return { success: true }
+  })
+
+  /** 获取当前用户信息 */
+  ipcMain.handle('auth:getUser', async () => {
+    try {
+      const user = sqlite.user.findById(DEFAULT_USER_ID)
+      if (!user) {
+        return { success: false, error: '用户不存在' }
+      }
+      return {
+        success: true,
+        data: { id: user.id, email: user.email, name: user.name, avatar: user.avatar }
+      }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // =============================================
+  // 系统通知（Electron 原生通知）
+  // =============================================
+
+  /** 显示原生系统通知 */
+  ipcMain.handle('notification:show', async (_event, { title, body, icon }) => {
+    try {
+      if (!Notification.isSupported()) {
+        return { success: false, error: '当前系统不支持通知' }
+      }
+
+      // 解析图标绝对路径（若提供相对路径）
+      let iconPath = icon
+      if (iconPath && !path.isAbsolute(iconPath)) {
+        const basePath = app.isPackaged
+          ? path.dirname(app.getPath('exe'))
+          : path.join(__dirname, '..', '..')
+        iconPath = path.join(basePath, iconPath.replace(/^\//, ''))
+        if (!fs.existsSync(iconPath)) {
+          iconPath = undefined
+        }
+      } else if (iconPath && !fs.existsSync(iconPath)) {
+        iconPath = undefined
+      }
+
+      const notificationOptions = {
+        title: title || 'TimeBlock',
+        body: body || '',
+        icon: iconPath
+      }
+      // timeoutType 仅在 Windows 上受支持，用于让通知长期显示
+      if (process.platform === 'win32') {
+        notificationOptions.timeoutType = 'never'
+      }
+
+      const notification = new Notification(notificationOptions)
+
+      notification.on('click', () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore()
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      })
+
+      notification.show()
+      return { success: true }
+    } catch (err) {
+      console.error('[IPC] notification:show 失败:', err.message)
       return { success: false, error: err.message }
     }
   })

@@ -1,5 +1,4 @@
-﻿const { SyncLog, Statistic } = require('../models')
-const { TimeBlock, Note } = require('../models')
+﻿const { SyncLog, Statistic, TimeBlock, Note, Reminder } = require('../models')
 const { success, error } = require('../utils/response')
 const { Op } = require('sequelize')
 const { durationInSeconds } = require('../utils/timeUtils')
@@ -30,7 +29,11 @@ async function upload(req, res, next) {
             id: noteData.id,
             user_id: userId,
             name: noteData.name,
-            color: noteData.color
+            color: noteData.color,
+            auto_remind: noteData.autoRemind !== undefined ? !!noteData.autoRemind : false,
+            default_advance_minutes: noteData.defaultAdvanceMinutes !== undefined
+              ? parseInt(noteData.defaultAdvanceMinutes) || 5
+              : 5
           })
           synced++
         }
@@ -48,6 +51,28 @@ async function upload(req, res, next) {
             start_time: tb.startTime,
             end_time: tb.endTime,
             is_completed: tb.isCompleted
+          })
+          synced++
+        }
+      }
+
+      // 上传提醒变更
+      if (changes.reminders && changes.reminders.length > 0) {
+        for (const r of changes.reminders) {
+          await Reminder.upsert({
+            id: r.id,
+            user_id: userId,
+            target_type: r.targetType || 'time_block',
+            target_id: r.targetId,
+            remind_at: r.remindAt,
+            advance_minutes: r.advanceMinutes !== undefined ? parseInt(r.advanceMinutes) || 0 : 0,
+            is_auto: r.isAuto !== undefined ? !!r.isAuto : false,
+            note_id: r.noteId || null,
+            title: r.title,
+            message: r.message || null,
+            status: r.status || 'pending',
+            triggered_at: r.triggeredAt || null,
+            dismissed_at: r.dismissedAt || null
           })
           synced++
         }
@@ -96,13 +121,16 @@ async function download(req, res, next) {
     }
 
     // 获取自上次同步以来的变更
-    const [notes, timeBlocks] = await Promise.all([
+    const [notes, timeBlocks, reminders] = await Promise.all([
       Note.findAll({
-        where: lastSyncAt ? { user_id: userId } : { user_id: userId }
+        where: whereClause
       }),
       TimeBlock.findAll({
         where: whereClause,
         include: [{ model: Note, as: 'note', attributes: ['id', 'name', 'color'] }]
+      }),
+      Reminder.findAll({
+        where: whereClause
       })
     ])
 
@@ -111,7 +139,10 @@ async function download(req, res, next) {
       notes: notes.map(n => ({
         id: n.id,
         name: n.name,
-        color: n.color
+        color: n.color,
+        autoRemind: n.auto_remind,
+        defaultAdvanceMinutes: n.default_advance_minutes,
+        updatedAt: n.updated_at
       })),
       timeBlocks: timeBlocks.map(tb => ({
         id: tb.id,
@@ -127,6 +158,21 @@ async function download(req, res, next) {
         endTime: tb.end_time,
         isCompleted: tb.is_completed,
         updatedAt: tb.updated_at
+      })),
+      reminders: reminders.map(r => ({
+        id: r.id,
+        targetType: r.target_type,
+        targetId: r.target_id,
+        remindAt: r.remind_at,
+        advanceMinutes: r.advance_minutes,
+        isAuto: r.is_auto,
+        noteId: r.note_id,
+        title: r.title,
+        message: r.message,
+        status: r.status,
+        triggeredAt: r.triggered_at,
+        dismissedAt: r.dismissed_at,
+        updatedAt: r.updated_at
       }))
     }
 

@@ -22,6 +22,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { App } from '@capacitor/app'
 import { platformInfo, database } from '@shared/platform'
+import { initReminderService } from './services/reminder'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import MobileTabBar from './components/layout/MobileTabBar.vue'
 
@@ -73,25 +74,69 @@ async function handleAppExit() {
   }
 }
 
+/**
+ * 应用状态变化时处理（iOS/Android 进入后台/前台）
+ */
+async function handleAppStateChange(state) {
+  console.log('[App] 应用状态变化:', state)
+  if (state?.isActive === false) {
+    console.log('[App] 应用进入后台，立即持久化数据...')
+    try {
+      await database.checkpoint(true)
+      console.log('[App] ✅ 后台数据已持久化')
+    } catch (err) {
+      console.error('[App] ❌ 后台数据持久化失败:', err)
+    }
+  }
+}
+
 // 应用启动时初始化数据库
 onMounted(async () => {
   // 初始化数据库（Electron/Capacitor 平台）
   console.log('[App] 开始初始化数据库...')
   console.log('[App] 当前平台:', platformInfo)
-  
+
   try {
     const success = await database.init()
     if (success) {
       console.log('[App] ✅ 数据库初始化成功')
-      
+
       // 验证数据库可用性
       const isValid = await database.validateDatabase()
       if (isValid) {
         console.log('[App] ✅ 数据库验证成功')
-        
+
+        // 验证关键表是否存在
+        try {
+          const tablesResult = await database.query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('users', 'notes', 'time_blocks', 'reminders', 'sync_logs', 'statistics');",
+            []
+          )
+          const existingTables = tablesResult.map(row => row.name)
+          const requiredTables = ['users', 'notes', 'time_blocks', 'reminders']
+          const missingTables = requiredTables.filter(t => !existingTables.includes(t))
+
+          if (missingTables.length > 0) {
+            console.error('[App] ❌ 关键表缺失:', missingTables)
+            console.error('[App] 提醒功能将无法正常工作')
+          } else {
+            console.log('[App] ✅ 所有关键表已存在:', existingTables)
+          }
+        } catch (err) {
+          console.error('[App] 表验证失败:', err)
+        }
+
         // 获取数据库详细信息（调试）
         const debugInfo = await database.getDebugInfo()
         console.log('[App] 数据库详细信息:', debugInfo)
+
+        // 数据库就绪后启动提醒服务
+        try {
+          await initReminderService()
+          console.log('[App] ✅ 提醒服务已启动')
+        } catch (reminderErr) {
+          console.error('[App] ❌ 提醒服务启动失败:', reminderErr)
+        }
       } else {
         console.error('[App] ❌ 数据库验证失败')
       }
@@ -103,18 +148,21 @@ onMounted(async () => {
     console.error('[App] ❌ 数据库初始化异常:', err)
     console.error('[App] 错误堆栈:', err.stack)
   }
-  
+
   // Capacitor 移动端：监听应用生命周期事件
   if (platformInfo.isCapacitor) {
     // 应用暂停（进入后台）
     App.addListener('appPause', handleAppPause)
-    
+
     // 应用退出（关闭应用）
-    App.addListener('appExit', handleAppExit)
-    
+    App.addEventListener('appExit', handleAppExit)
+
+    // 应用状态变化（iOS/Android 进入后台/前台）
+    App.addEventListener('appStateChange', handleAppStateChange)
+
     console.log('[App] 已注册应用生命周期监听器')
   }
-  
+
   // Web 端监听窗口尺寸变化
   if (!platformInfo.isElectron && !platformInfo.isCapacitor) {
     window.addEventListener('resize', () => {

@@ -1,11 +1,13 @@
 const crypto = require('crypto')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const crypto = require('crypto')
 const { User } = require('../models')
 const { success, error } = require('../utils/response')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'timeblock-jwt-secret-key'
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'
+const RESET_TOKEN_EXPIRES = 60 * 60 * 1000 // 1小时
 
 /** 密码重置令牌有效期（毫秒），默认 1 小时 */
 const RESET_TOKEN_TTL = 60 * 60 * 1000
@@ -141,49 +143,41 @@ async function me(req, res, next) {
 
 /**
  * POST /api/auth/forgot-password
- * 忘记密码 — 发送密码重置令牌
+ * 请求密码重置
  *
- * 流程：
- * 1. 根据邮箱查找用户
- * 2. 生成随机重置令牌（crypto.randomBytes）
- * 3. 将令牌哈希后存入数据库，设置 1 小时过期
- * 4. 开发环境：在响应中返回原始令牌供测试
- *    生产环境：通过邮件发送重置链接（需配置邮件服务）
+ * 生成重置Token并发送到用户邮箱（简化版：直接返回Token用于演示）
  */
 async function forgotPassword(req, res, next) {
   try {
     const { email } = req.body
 
-    // 出于安全考虑，无论用户是否存在都返回相同消息
+    // 查找用户
     const user = await User.findOne({ where: { email } })
     if (!user) {
-      return success(res, null, '如果该邮箱已注册，重置链接已发送')
+      // 不暴露用户是否存在的信息
+      return success(res, { message: '如果邮箱已注册，重置链接将发送到您的邮箱' })
     }
 
-    // 生成随机令牌
-    const rawToken = crypto.randomBytes(32).toString('hex')
+    // 生成重置Token（随机32字节）
+    const resetToken = crypto.randomBytes(32).toString('hex')
+    const resetTokenExpires = new Date(Date.now() + RESET_TOKEN_EXPIRES)
 
-    // 哈希后存储（与密码同理，防止数据库泄露后令牌被利用）
-    const hashedToken = await bcrypt.hash(rawToken, 10)
+    // 存储Token到用户记录
+    await user.update({
+      reset_token: resetToken,
+      reset_token_expires: resetTokenExpires
+    })
 
-    user.reset_token = hashedToken
-    user.reset_token_expires_at = new Date(Date.now() + RESET_TOKEN_TTL)
-    await user.save()
+    // 简化版：直接返回Token（实际应发送邮件）
+    // 生产环境应配置邮件服务（如 nodemailer）
+    console.log(`[Auth] 密码重置Token: ${resetToken} (邮箱: ${email})`)
 
-    // 开发环境下返回原始令牌方便测试
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[DEV] 密码重置令牌 (${email}): ${rawToken}`)
-      return success(res, {
-        resetToken: rawToken,
-        expiresIn: '1小时',
-        _note: '开发环境直接返回令牌；生产环境应通过邮件发送'
-      }, '密码重置令牌已生成（开发模式）')
-    }
-
-    // TODO: 生产环境接入邮件服务发送重置链接
-    // await sendPasswordResetEmail(email, rawToken)
-
-    return success(res, null, '如果该邮箱已注册，重置链接已发送')
+    return success(res, {
+      message: '重置Token已生成',
+      // 简化演示：返回Token（生产环境应发送邮件，不返回Token）
+      resetToken: process.env.NODE_ENV === 'development' ? resetToken : undefined,
+      expiresIn: 3600 // 1小时
+    })
 
   } catch (err) {
     next(err)
@@ -192,50 +186,50 @@ async function forgotPassword(req, res, next) {
 
 /**
  * POST /api/auth/reset-password
- * 重置密码 — 使用令牌设置新密码
- *
- * 流程：
- * 1. 根据邮箱查找用户
- * 2. 验证重置令牌是否匹配且未过期
- * 3. 更新密码并清除重置令牌
+ * 使用Token重置密码
  */
 async function resetPassword(req, res, next) {
   try {
-    const { email, token, newPassword } = req.body
+    const { token, newPassword } = req.body
 
-    const user = await User.findOne({ where: { email } })
+    if (!token || !newPassword) {
+      return error(res, 'BAD_REQUEST', 'Token和新密码不能为空', 400)
+    }
+
+    if (newPassword.length < 6) {
+      return error(res, 'BAD_REQUEST', '密码长度至少6位', 400)
+    }
+
+    // 查找有效Token的用户
+    const user = await User.findOne({
+      where: {
+        reset_token: token,
+        reset_token_expires: { [require('sequelize').Op.gt]: new Date() }
+      }
+    })
+
     if (!user) {
-      return error(res, 'VALIDATION_ERROR', '无效的重置请求', 400)
+      return error(res, 'BAD_REQUEST', '重置Token无效或已过期', 400)
     }
 
-    // 验证令牌是否存在
-    if (!user.reset_token || !user.reset_token_expires_at) {
-      return error(res, 'VALIDATION_ERROR', '未发起密码重置请求，请先点击"忘记密码"', 400)
-    }
-
-    // 验证令牌是否过期
-    if (new Date() > new Date(user.reset_token_expires_at)) {
-      // 清除过期令牌
-      user.reset_token = null
-      user.reset_token_expires_at = null
-      await user.save()
-      return error(res, 'TOKEN_EXPIRED', '重置令牌已过期（有效期1小时），请重新发起重置', 400)
-    }
-
-    // 验证令牌是否匹配
-    const isTokenValid = await bcrypt.compare(token, user.reset_token)
-    if (!isTokenValid) {
-      return error(res, 'VALIDATION_ERROR', '重置令牌无效', 400)
-    }
-
-    // 更新密码
+    // 加密新密码
     const hashedPassword = await bcrypt.hash(newPassword, 10)
-    user.password = hashedPassword
-    user.reset_token = null
-    user.reset_token_expires_at = null
-    await user.save()
 
-    return success(res, null, '密码重置成功，请使用新密码登录')
+    // 更新密码并清除Token
+    await user.update({
+      password: hashedPassword,
+      reset_token: null,
+      reset_token_expires: null
+    })
+
+    // 生成新的JWT Token（自动登录）
+    const accessToken = generateToken(user)
+
+    return success(res, {
+      accessToken,
+      user: sanitizeUser(user),
+      message: '密码已重置成功'
+    })
 
   } catch (err) {
     next(err)

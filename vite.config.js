@@ -39,6 +39,7 @@ export default defineConfig({
       '@views': path.join(__dirname, 'src', 'renderer', 'views'),
       '@stores': path.join(__dirname, 'src', 'renderer', 'stores'),
       '@utils': path.join(__dirname, 'src', 'renderer', 'utils'),
+      '@api': path.join(__dirname, 'src', 'renderer', 'api'),
       '@shared': path.join(__dirname, 'src', 'shared')
     }
   }

@@ -16,7 +16,10 @@ async function list(req, res, next) {
       id: n.id,
       name: n.name,
       color: n.color,
-      createdAt: n.created_at
+      autoRemind: n.auto_remind,
+      defaultAdvanceMinutes: n.default_advance_minutes,
+      createdAt: n.created_at,
+      updatedAt: n.updated_at
     })))
 
   } catch (err) {
@@ -30,19 +33,26 @@ async function list(req, res, next) {
  */
 async function create(req, res, next) {
   try {
-    const { name, color } = req.body
+    const { name, color, autoRemind, defaultAdvanceMinutes } = req.body
 
     const note = await Note.create({
       user_id: req.user.id,
       name,
-      color: color || '#409eff'
+      color: color || '#409eff',
+      auto_remind: autoRemind !== undefined ? !!autoRemind : false,
+      default_advance_minutes: defaultAdvanceMinutes !== undefined
+        ? parseInt(defaultAdvanceMinutes) || 5
+        : 5
     })
 
     return success(res, {
       id: note.id,
       name: note.name,
       color: note.color,
-      createdAt: note.created_at
+      autoRemind: note.auto_remind,
+      defaultAdvanceMinutes: note.default_advance_minutes,
+      createdAt: note.created_at,
+      updatedAt: note.updated_at
     }, '便签创建成功', 201)
 
   } catch (err) {
@@ -57,7 +67,7 @@ async function create(req, res, next) {
 async function update(req, res, next) {
   try {
     const { id } = req.params
-    const { name, color } = req.body
+    const { name, color, autoRemind, defaultAdvanceMinutes } = req.body
 
     const note = await Note.findOne({
       where: { id, user_id: req.user.id }
@@ -70,6 +80,10 @@ async function update(req, res, next) {
     const updates = {}
     if (name !== undefined) updates.name = name
     if (color !== undefined) updates.color = color
+    if (autoRemind !== undefined) updates.auto_remind = !!autoRemind
+    if (defaultAdvanceMinutes !== undefined) {
+      updates.default_advance_minutes = parseInt(defaultAdvanceMinutes) || 5
+    }
 
     await note.update(updates)
 
@@ -77,7 +91,10 @@ async function update(req, res, next) {
       id: note.id,
       name: note.name,
       color: note.color,
-      createdAt: note.created_at
+      autoRemind: note.auto_remind,
+      defaultAdvanceMinutes: note.default_advance_minutes,
+      createdAt: note.created_at,
+      updatedAt: note.updated_at
     }, '便签更新成功')
 
   } catch (err) {

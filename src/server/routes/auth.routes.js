@@ -21,17 +21,16 @@ router.post('/login', [
   validate
 ], authController.login)
 
-// POST /api/auth/forgot-password — 忘记密码，发送重置令牌
+// POST /api/auth/forgot-password
 router.post('/forgot-password', [
-  body('email').isEmail().withMessage('请输入有效的邮箱地址'),
+  body('email').isEmail().withMessage('邮箱格式不正确'),
   validate
 ], authController.forgotPassword)
 
-// POST /api/auth/reset-password — 使用令牌重置密码
+// POST /api/auth/reset-password
 router.post('/reset-password', [
-  body('email').isEmail().withMessage('请输入有效的邮箱地址'),
-  body('token').notEmpty().withMessage('重置令牌不能为空'),
-  body('newPassword').isLength({ min: 6 }).withMessage('新密码长度至少6位'),
+  body('token').notEmpty().withMessage('重置Token不能为空'),
+  body('newPassword').isLength({ min: 6 }).withMessage('密码长度至少6位'),
   validate
 ], authController.resetPassword)
 

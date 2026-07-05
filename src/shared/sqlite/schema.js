@@ -12,10 +12,10 @@
  * 共 6 张表:
  *   1. users          - 用户表
  *   2. notes          - 便签表
- *   3. time_blocks     - 时间块表
- *   4. active_timers   - 计时器运行状态表
- *   5. sync_logs       - 同步记录表
- *   6. statistics      - 统计汇总表
+ *   3. time_blocks    - 时间块表
+ *   4. reminders      - 提醒通知表（时间块/便签级别提醒）
+ *   5. sync_logs      - 同步记录表
+ *   6. statistics     - 统计汇总表
  *
  * @module sqlite/schema
  */
@@ -40,12 +40,15 @@ const SCHEMA_SQL = [
 
   // =============================================
   // 2. notes 便签表
+  // 添加自动提醒配置字段
   // =============================================
   `CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     name VARCHAR(100) NOT NULL,
     color VARCHAR(7) NOT NULL DEFAULT '#409eff',
+    auto_remind INTEGER NOT NULL DEFAULT 0 CHECK(auto_remind IN (0, 1)),
+    default_advance_minutes INTEGER NOT NULL DEFAULT 5,
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
     updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
     deleted_at DATETIME NULL DEFAULT NULL,
@@ -54,6 +57,7 @@ const SCHEMA_SQL = [
 
   `CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);`,
   `CREATE INDEX IF NOT EXISTS idx_notes_deleted ON notes(deleted_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_auto_remind ON notes(auto_remind);`,
 
   // =============================================
   // 3. time_blocks 时间块表
@@ -87,23 +91,37 @@ const SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS idx_timeblocks_deleted ON time_blocks(deleted_at);`,
 
   // =============================================
-  // 4. active_timers 计时器运行状态表
-  // 每用户同时仅一个运行中的计时器（PRIMARY KEY = user_id）
+  // 4. reminders 提醒通知表
+  // 支持时间块级别提醒和便签级别提醒
+  // is_auto: 是否由便签自动提醒功能生成
   // =============================================
-  `CREATE TABLE IF NOT EXISTS active_timers (
-    user_id INTEGER NOT NULL PRIMARY KEY,
-    time_block_id INTEGER NULL DEFAULT NULL,
-    title VARCHAR(200) NOT NULL,
+  `CREATE TABLE IF NOT EXISTS reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    target_type VARCHAR(20) NOT NULL DEFAULT 'time_block' CHECK(target_type IN ('time_block', 'note')),
+    target_id INTEGER NOT NULL,
+    remind_at DATETIME NOT NULL,
+    advance_minutes INTEGER NOT NULL DEFAULT 0,
+    is_auto INTEGER NOT NULL DEFAULT 0 CHECK(is_auto IN (0, 1)),
     note_id INTEGER NULL DEFAULT NULL,
-    started_at DATETIME NOT NULL,
-    elapsed_paused INTEGER NOT NULL DEFAULT 0,
-    is_paused INTEGER NOT NULL DEFAULT 0 CHECK(is_paused IN (0, 1)),
+    title VARCHAR(200) NOT NULL,
+    message TEXT NULL DEFAULT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'triggered', 'dismissed', 'cancelled')),
+    triggered_at DATETIME NULL DEFAULT NULL,
+    dismissed_at DATETIME NULL DEFAULT NULL,
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (time_block_id) REFERENCES time_blocks(id) ON DELETE SET NULL
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE SET NULL
+    -- target_id 为 polymorphic 字段（time_block/note），不创建外键约束
   );`,
 
-  `CREATE INDEX IF NOT EXISTS idx_timer_block ON active_timers(time_block_id);`,
+  // 提醒表索引（与 MySQL DDL 对齐）
+  `CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_reminders_target ON reminders(target_type, target_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_reminder_status ON reminders(user_id, status, remind_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_reminders_note ON reminders(note_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_reminders_auto ON reminders(is_auto);`,
 
   // =============================================
   // 5. sync_logs 同步记录表

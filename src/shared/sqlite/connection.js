@@ -68,7 +68,7 @@ async function init(options = {}) {
     return db
   }
 
-  currentDbPath = options.dbPath || path.join(__dirname, '..', '..', 'server', 'data', 'timeblock_local.db')
+  currentDbPath = options.dbPath || path.join(__dirname, '..', '..', 'data', 'timeblock_local.db')
   const dbDir = path.dirname(currentDbPath)
 
   // 确保数据目录存在
