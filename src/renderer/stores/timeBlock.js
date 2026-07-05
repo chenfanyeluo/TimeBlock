@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import { storage } from '@shared/platform'
 import { platformInfo, database } from '@shared/platform'
 import { createTimeBlockReminder, cancelTimeBlockReminder, syncReminderAfterTimeBlockUpdate } from '../services/reminder'
+import { getUserId } from '@api/client'
 
 /**
  * 检查是否支持数据库（Electron 或 Capacitor）
@@ -254,7 +255,7 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
           return
         }
 
-        const result = await database.query('SELECT * FROM notes WHERE user_id = 1 AND deleted_at IS NULL')
+        const result = await database.query('SELECT * FROM notes WHERE user_id = ? AND deleted_at IS NULL', [getUserId()])
         console.log('[Store] Capacitor 查询结果:', result)
 
         if (result.length === 0) {
@@ -274,7 +275,7 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       } else if (isElectron()) {
         // Electron 平台：使用 IPC
         console.log('[Store] Electron 平台：从数据库加载便签')
-        const result = await window.electronAPI.getAllNotes()
+        const result = await window.electronAPI.getAllNotes(getUserId())
         if (result.success && result.data) {
           if (result.data.length === 0) {
             await initDefaultNotes()
@@ -321,12 +322,12 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       if (platformInfo.isCapacitor && database.isReady()) {
         for (const note of defaultNotes) {
           await database.run(
-            'INSERT INTO notes (user_id, name, color) VALUES (1, ?, ?);',
-            [note.name, note.color]
+            'INSERT INTO notes (user_id, name, color) VALUES (?, ?, ?);',
+            [getUserId(), note.name, note.color]
           )
         }
         // 重新加载
-        const result = await database.query('SELECT * FROM notes WHERE user_id = 1 AND deleted_at IS NULL')
+        const result = await database.query('SELECT * FROM notes WHERE user_id = ? AND deleted_at IS NULL', [getUserId()])
         notes.value = result.map(n => ({
           id: n.id,
           name: n.name,
@@ -337,9 +338,9 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         console.log('[Store] ✅ 初始化默认便签成功:', notes.value.length)
       } else if (isElectron()) {
         for (const note of defaultNotes) {
-          await window.electronAPI.createNote(note)
+          await window.electronAPI.createNote({ ...note, userId: getUserId() })
         }
-        const result = await window.electronAPI.getAllNotes()
+        const result = await window.electronAPI.getAllNotes(getUserId())
         if (result.success && result.data) {
             notes.value = result.data.map(n => ({
               id: n.id,
@@ -384,8 +385,8 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
             ? Math.max(0, noteData.default_advance_minutes)
             : 5
           const result = await database.run(
-            'INSERT INTO notes (user_id, name, color, auto_remind, default_advance_minutes) VALUES (1, ?, ?, ?, ?);',
-            [noteData.name, noteData.color || '#909399', autoRemind, defaultAdvanceMinutes]
+            'INSERT INTO notes (user_id, name, color, auto_remind, default_advance_minutes) VALUES (?, ?, ?, ?, ?);',
+            [getUserId(), noteData.name, noteData.color || '#909399', autoRemind, defaultAdvanceMinutes]
           )
           const newNote = await database.query(
             'SELECT * FROM notes WHERE id = ?;',
@@ -403,7 +404,7 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
             return notes.value[notes.value.length - 1]
           }
         } else if (isElectron()) {
-          const result = await window.electronAPI.createNote(noteData)
+          const result = await window.electronAPI.createNote({ ...noteData, userId: getUserId() })
           if (result.success && result.data) {
             notes.value.push({
               id: result.data.id,
@@ -590,13 +591,13 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
           SELECT tb.*, n.name as note_name, n.color as note_color
           FROM time_blocks tb
           LEFT JOIN notes n ON tb.note_id = n.id
-          WHERE tb.user_id = 1
+          WHERE tb.user_id = ?
             AND DATE(tb.start_time) = DATE(?)
             AND tb.deleted_at IS NULL
           ORDER BY tb.start_time ASC
         `
 
-        const result = await database.query(querySQL, [date])
+        const result = await database.query(querySQL, [getUserId(), date])
         console.log('[Store] Capacitor 查询结果:', result.length)
 
         const newBlocks = result.map(dbBlockToFrontend)
@@ -622,7 +623,7 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       } else if (isElectron()) {
         // Electron 平台：使用 IPC
         console.log('[Store] Electron 平台：从数据库加载时间块', date)
-        const result = await window.electronAPI.getTimeBlocksByDate(date)
+        const result = await window.electronAPI.getTimeBlocksByDate(date, getUserId())
         if (result.success && result.data) {
           const newBlocks = result.data.map(dbBlockToFrontend)
 
@@ -651,15 +652,33 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
   }
 
   /**
+   * 重置用户数据（退出登录或切换账号时调用）
+   * 清空内存中的 blocks 和 notes，重置 isDataLoaded 标志
+   */
+  function resetUserData() {
+    blocks.value = []
+    notes.value = []
+    isDataLoaded.value = false
+    undoStack.value = []
+    redoStack.value = []
+    console.log('[Store] 用户数据已重置')
+  }
+
+  /**
    * 初始化数据加载
    */
-  async function initData() {
-    if (isDataLoaded.value) return
+  async function initData(force = false) {
+    if (isDataLoaded.value && !force) return
+
+    if (force) {
+      blocks.value = []
+      notes.value = []
+    }
 
     await loadNotesFromDB()
     await loadBlocksByDateFromDB(dayjs().format('YYYY-MM-DD'))
     isDataLoaded.value = true
-    console.log('[Store] 数据初始化完成')
+    console.log('[Store] 数据初始化完成, user_id:', getUserId())
   }
 
   // 自动初始化
@@ -755,10 +774,11 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
           
           const insertSQL = `
             INSERT INTO time_blocks (user_id, note_id, title, description, start_time, end_time, is_completed)
-            VALUES (1, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
           `
-          
+
           const result = await database.run(insertSQL, [
+            getUserId(),
             dbData.note_id,
             dbData.title,
             dbData.description,
@@ -826,7 +846,7 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         } else if (isElectron()) {
           // Electron 平台：使用 IPC
           console.log('[Store] Electron 平台：写入数据库')
-          const result = await window.electronAPI.createTimeBlock(dbData)
+          const result = await window.electronAPI.createTimeBlock({ ...dbData, userId: getUserId() })
           if (result.success && result.data) {
             const newBlock = dbBlockToFrontend(result.data)
             blocks.value.push(newBlock)
@@ -925,7 +945,7 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         const result = await database.run(
           `UPDATE time_blocks
            SET note_id = ?, title = ?, description = ?, start_time = ?, end_time = ?, is_completed = ?, updated_at = datetime('now')
-           WHERE id = ? AND user_id = 1 AND deleted_at IS NULL;`,
+           WHERE id = ? AND user_id = ? AND deleted_at IS NULL;`,
           [
             dbData.note_id,
             dbData.title,
@@ -933,7 +953,8 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
             dbData.start_time,
             dbData.end_time,
             dbData.is_completed,
-            id
+            id,
+            getUserId()
           ]
         )
 
@@ -1070,6 +1091,7 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
     deleteBlock,
     loadMoreBlocks,
     initData,
+    resetUserData,
     // 便签操作（完整 CRUD）
     createNote,
     updateNote,

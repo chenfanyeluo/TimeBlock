@@ -11,13 +11,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // =============================================
 
   /** 获取指定日期的时间块 */
-  getTimeBlocksByDate: (date) => ipcRenderer.invoke('timeBlock:getByDate', date),
+  getTimeBlocksByDate: (date, userId) => ipcRenderer.invoke('timeBlock:getByDate', date, userId),
 
   /** 获取周视图时间块 */
-  getTimeBlocksByWeek: (startDate, endDate) => ipcRenderer.invoke('timeBlock:getByWeek', startDate, endDate),
+  getTimeBlocksByWeek: (startDate, endDate, userId) => ipcRenderer.invoke('timeBlock:getByWeek', startDate, endDate, userId),
 
   /** 获取月视图时间块 */
-  getTimeBlocksByMonth: (year, month) => ipcRenderer.invoke('timeBlock:getByMonth', year, month),
+  getTimeBlocksByMonth: (year, month, userId) => ipcRenderer.invoke('timeBlock:getByMonth', year, month, userId),
 
   /** 创建时间块 */
   createTimeBlock: (data) => ipcRenderer.invoke('timeBlock:create', data),
@@ -33,7 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // =============================================
 
   /** 获取所有便签 */
-  getAllNotes: () => ipcRenderer.invoke('note:getAll'),
+  getAllNotes: (userId) => ipcRenderer.invoke('note:getAll', userId),
 
   /** 根据 ID 获取便签 */
   getNoteById: (id) => ipcRenderer.invoke('note:getById', id),

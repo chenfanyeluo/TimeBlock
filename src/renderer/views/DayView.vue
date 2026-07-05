@@ -480,6 +480,7 @@ import { useTimeBlockStore } from '@stores/timeBlock'
 import { platformInfo, database } from '@shared/platform'
 import { searchTimeBlocks } from '@api/timeBlock'
 import authApi from '@api/auth'
+import { getUserId } from '@api/client'
 import { createTimeBlockReminder, cancelTimeBlockReminder, checkNoteAutoRemind, getTimeBlockReminder, getPendingReminders } from '../services/reminder'
 
 const store = useTimeBlockStore()
@@ -495,15 +496,15 @@ async function loadReminderStatus() {
   try {
     // 1. 查询单独设置提醒的时间块
     const reminders = await database.query(
-      `SELECT target_id FROM reminders WHERE user_id = 1 AND target_type = 'time_block' AND status = 'pending';`,
-      []
+      `SELECT target_id FROM reminders WHERE user_id = ? AND target_type = 'time_block' AND status = 'pending';`,
+      [getUserId()]
     )
     const manualReminderBlockIds = reminders.map(r => r.target_id)
 
     // 2. 查询开启自动提醒的便签
     const autoRemindNotes = await database.query(
-      `SELECT id FROM notes WHERE user_id = 1 AND auto_remind = 1 AND deleted_at IS NULL;`,
-      []
+      `SELECT id FROM notes WHERE user_id = ? AND auto_remind = 1 AND deleted_at IS NULL;`,
+      [getUserId()]
     )
     const autoRemindNoteIds = autoRemindNotes.map(n => n.id)
 
@@ -513,11 +514,11 @@ async function loadReminderStatus() {
       const today = currentDate.value
       const autoRemindBlocks = await database.query(
         `SELECT id FROM time_blocks
-         WHERE user_id = 1
+         WHERE user_id = ?
          AND note_id IN (${autoRemindNoteIds.map(() => '?').join(',')})
          AND date(start_time) = ?
          AND deleted_at IS NULL;`,
-        [...autoRemindNoteIds, today]
+        [getUserId(), ...autoRemindNoteIds, today]
       )
       autoReminderBlockIds = autoRemindBlocks.map(b => b.id)
     }
@@ -589,11 +590,11 @@ async function handleSearch() {
                   n.name AS note_name, n.color AS note_color
            FROM time_blocks tb
            LEFT JOIN notes n ON tb.note_id = n.id AND n.deleted_at IS NULL
-           WHERE tb.user_id = 1 AND tb.deleted_at IS NULL
+           WHERE tb.user_id = ? AND tb.deleted_at IS NULL
              AND (tb.title LIKE ? OR tb.description LIKE ? OR n.name LIKE ?)
            ORDER BY tb.start_time DESC
            LIMIT 50;`,
-          [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`]
+          [getUserId(), `%${keyword}%`, `%${keyword}%`, `%${keyword}%`]
         )
 
         if (localResults.length > 0) {

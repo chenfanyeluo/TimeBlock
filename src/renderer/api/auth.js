@@ -4,7 +4,7 @@
  * 用户登录、注册、Token 管理
  */
 
-import client, { setToken, clearToken, getToken } from './client'
+import client, { setToken, clearToken, getToken, setUserId, clearUserId } from './client'
 
 /**
  * 用户登录
@@ -17,8 +17,9 @@ export async function login(email, password) {
   const response = await client.post('/auth/login', { email, password })
 
   if (response.success && response.data?.accessToken) {
-    // 存储 Token
+    // 存储 Token 和用户 ID
     setToken(response.data.accessToken)
+    setUserId(response.data.user?.id)
     return response.data
   }
 
@@ -37,8 +38,9 @@ export async function register(email, password, name) {
   const response = await client.post('/auth/register', { email, password, name })
 
   if (response.success && response.data?.accessToken) {
-    // 存储 Token
+    // 存储 Token 和用户 ID
     setToken(response.data.accessToken)
+    setUserId(response.data.user?.id)
     return response.data
   }
 
@@ -46,10 +48,11 @@ export async function register(email, password, name) {
 }
 
 /**
- * 退出登录（清除本地 Token）
+ * 退出登录（清除本地 Token 和用户 ID）
  */
 export function logout() {
   clearToken()
+  clearUserId()
 }
 
 /**
@@ -67,6 +70,7 @@ export async function refreshToken() {
 
   // Token 刷新失败，清除旧 Token
   clearToken()
+  clearUserId()
   throw new Error(response.message || 'Token刷新失败')
 }
 
@@ -126,8 +130,9 @@ export async function resetPassword(token, newPassword) {
   const response = await client.post('/auth/reset-password', { token, newPassword })
 
   if (response.success && response.data?.accessToken) {
-    // 存储 Token（自动登录）
+    // 存储 Token 和用户 ID（自动登录）
     setToken(response.data.accessToken)
+    setUserId(response.data.user?.id)
     return response.data
   }
 
@@ -145,6 +150,7 @@ export async function deleteAccount(password) {
 
   if (response.success) {
     clearToken()
+    clearUserId()
     return response.data
   }
 

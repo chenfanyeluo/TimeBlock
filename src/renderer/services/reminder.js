@@ -11,6 +11,7 @@
 import { platformInfo, database } from '@shared/platform'
 import { ElNotification } from 'element-plus'
 import dayjs from 'dayjs'
+import { getUserId } from '@api/client'
 
 // 提醒检查间隔（毫秒）
 const CHECK_INTERVAL = 60 * 1000 // 1分钟
@@ -93,12 +94,12 @@ async function checkReminders() {
   }
 
   try {
-    // 查询需要触发的提醒（userId = 1，默认单用户）
+    // 查询需要触发的提醒（按当前登录用户过滤）
     // 使用 ISO 字符串参数化比较，避免与 SQLite datetime('now') 格式不一致导致字典序比较错误
     const nowIso = dayjs().toISOString()
     const dueReminders = await database.query(
-      `SELECT * FROM reminders WHERE user_id = 1 AND status = 'pending' AND remind_at <= ? ORDER BY remind_at ASC;`,
-      [nowIso]
+      `SELECT * FROM reminders WHERE user_id = ? AND status = 'pending' AND remind_at <= ? ORDER BY remind_at ASC;`,
+      [getUserId(), nowIso]
     )
 
     console.log('[Reminder] 检查到期提醒:', {
@@ -259,8 +260,9 @@ export async function createTimeBlockReminder(timeBlock, advanceMinutes = 5, isA
   try {
     const result = await database.run(
       `INSERT INTO reminders (user_id, target_type, target_id, remind_at, advance_minutes, is_auto, note_id, title, message, status, created_at, updated_at)
-       VALUES (1, 'time_block', ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), datetime('now'));`,
+       VALUES (?, 'time_block', ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), datetime('now'));`,
       [
+        getUserId(),
         timeBlock.id,
         remindAt.toISOString(),
         minutes,
@@ -446,7 +448,8 @@ export async function getPendingReminders() {
 
   try {
     const reminders = await database.query(
-      `SELECT * FROM reminders WHERE user_id = 1 AND status = 'pending' ORDER BY remind_at ASC;`
+      `SELECT * FROM reminders WHERE user_id = ? AND status = 'pending' ORDER BY remind_at ASC;`,
+      [getUserId()]
     )
     return reminders
   } catch (err) {
@@ -476,7 +479,8 @@ export async function getTriggeredReminders() {
 
   try {
     const reminders = await database.query(
-      `SELECT * FROM reminders WHERE user_id = 1 AND status = 'triggered' ORDER BY triggered_at DESC;`
+      `SELECT * FROM reminders WHERE user_id = ? AND status = 'triggered' ORDER BY triggered_at DESC;`,
+      [getUserId()]
     )
     return reminders
   } catch (err) {

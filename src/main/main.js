@@ -115,9 +115,10 @@ function registerIPCHandlers() {
   // =============================================
 
   /** 获取指定日期的时间块 */
-  ipcMain.handle('timeBlock:getByDate', async (_event, date) => {
+  ipcMain.handle('timeBlock:getByDate', async (_event, date, userId) => {
     try {
-      const blocks = sqlite.timeBlock.findByDate(DEFAULT_USER_ID, date)
+      const uid = userId || DEFAULT_USER_ID
+      const blocks = sqlite.timeBlock.findByDate(uid, date)
       return { success: true, data: blocks }
     } catch (err) {
       console.error('[IPC] timeBlock:getByDate 失败:', err.message)
@@ -126,9 +127,10 @@ function registerIPCHandlers() {
   })
 
   /** 获取周视图时间块 */
-  ipcMain.handle('timeBlock:getByWeek', async (_event, startDate, endDate) => {
+  ipcMain.handle('timeBlock:getByWeek', async (_event, startDate, endDate, userId) => {
     try {
-      const blocks = sqlite.timeBlock.findByWeek(DEFAULT_USER_ID, startDate, endDate)
+      const uid = userId || DEFAULT_USER_ID
+      const blocks = sqlite.timeBlock.findByWeek(uid, startDate, endDate)
       return { success: true, data: blocks }
     } catch (err) {
       console.error('[IPC] timeBlock:getByWeek 失败:', err.message)
@@ -137,9 +139,10 @@ function registerIPCHandlers() {
   })
 
   /** 获取月视图时间块 */
-  ipcMain.handle('timeBlock:getByMonth', async (_event, year, month) => {
+  ipcMain.handle('timeBlock:getByMonth', async (_event, year, month, userId) => {
     try {
-      const blocks = sqlite.timeBlock.findByMonth(DEFAULT_USER_ID, year, month)
+      const uid = userId || DEFAULT_USER_ID
+      const blocks = sqlite.timeBlock.findByMonth(uid, year, month)
       return { success: true, data: blocks }
     } catch (err) {
       console.error('[IPC] timeBlock:getByMonth 失败:', err.message)
@@ -151,7 +154,7 @@ function registerIPCHandlers() {
   ipcMain.handle('timeBlock:create', async (_event, data) => {
     try {
       const block = sqlite.timeBlock.create({
-        user_id: DEFAULT_USER_ID,
+        user_id: data.userId || DEFAULT_USER_ID,
         note_id: data.note_id || null,
         title: data.title,
         description: data.description || null,
@@ -193,9 +196,10 @@ function registerIPCHandlers() {
   // =============================================
 
   /** 获取所有便签 */
-  ipcMain.handle('note:getAll', async () => {
+  ipcMain.handle('note:getAll', async (_event, userId) => {
     try {
-      const notes = sqlite.note.findByUserId(DEFAULT_USER_ID)
+      const uid = userId || DEFAULT_USER_ID
+      const notes = sqlite.note.findByUserId(uid)
       return { success: true, data: notes }
     } catch (err) {
       console.error('[IPC] note:getAll 失败:', err.message)
@@ -218,7 +222,7 @@ function registerIPCHandlers() {
   ipcMain.handle('note:create', async (_event, data) => {
     try {
       const note = sqlite.note.create({
-        user_id: DEFAULT_USER_ID,
+        user_id: data.userId || DEFAULT_USER_ID,
         name: data.name,
         color: data.color || '#409eff',
         auto_remind: data.auto_remind !== undefined ? data.auto_remind : 0,
