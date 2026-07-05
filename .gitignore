@@ -50,3 +50,7 @@ ios/App/Pods/
 # 测试覆盖率
 coverage/
 .nyc_output/
+
+# 签名密钥
+*.keystore
+*.jks
