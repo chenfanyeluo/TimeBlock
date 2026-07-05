@@ -1,16 +1,13 @@
 const crypto = require('crypto')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
-const crypto = require('crypto')
 const { User } = require('../models')
 const { success, error } = require('../utils/response')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'timeblock-jwt-secret-key'
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'
-const RESET_TOKEN_EXPIRES = 60 * 60 * 1000 // 1小时
-
 /** 密码重置令牌有效期（毫秒），默认 1 小时 */
-const RESET_TOKEN_TTL = 60 * 60 * 1000
+const RESET_TOKEN_EXPIRES = 60 * 60 * 1000
 
 /**
  * 生成 JWT Token
