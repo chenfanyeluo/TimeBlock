@@ -304,6 +304,7 @@ import { getTimeBlockReminder, cancelTimeBlockReminder, getPendingReminders } fr
 import { ElMessageBox } from 'element-plus'
 import { ElMessage } from '@utils/message'
 import { useTimeBlockStore } from '@stores/timeBlock'
+import * as authApi from '@api/auth'
 
 const router = useRouter()
 const route = useRoute()
@@ -499,17 +500,59 @@ function viewSyncLog() {
   ElMessage.info('暂无同步日志')
 }
 
-function login() {
-  isLoggedIn.value = true
-  ElMessage.success('登录成功')
+async function login() {
+  if (!accountForm.value.email || !accountForm.value.password) {
+    ElMessage.warning('请输入邮箱和密码')
+    return
+  }
+
+  try {
+    const result = await authApi.login(accountForm.value.email, accountForm.value.password)
+    isLoggedIn.value = true
+    userInfo.value = {
+      username: result.user.name || 'User',
+      email: result.user.email || accountForm.value.email
+    }
+    ElMessage.success('登录成功')
+    // 重置 store 数据并重新加载新用户数据
+    store.resetUserData()
+    store.initData(true)
+  } catch (err) {
+    console.error('[SettingsDetailView] 登录失败:', err)
+    ElMessage.error(err.message || '登录失败，请检查邮箱和密码')
+  }
 }
 
-function register() {
-  ElMessage.success('注册成功，请登录')
+async function register() {
+  if (!accountForm.value.email || !accountForm.value.password) {
+    ElMessage.warning('请输入邮箱和密码')
+    return
+  }
+
+  try {
+    await authApi.register(
+      accountForm.value.email,
+      accountForm.value.password,
+      accountForm.value.email.split('@')[0]
+    )
+    ElMessage.success('注册成功，已自动登录')
+    isLoggedIn.value = true
+    // 重置 store 数据并重新加载新用户数据
+    store.resetUserData()
+    store.initData(true)
+  } catch (err) {
+    console.error('[SettingsDetailView] 注册失败:', err)
+    ElMessage.error(err.message || '注册失败')
+  }
 }
 
 function logout() {
+  authApi.logout()
   isLoggedIn.value = false
+  userInfo.value = { username: 'User', email: 'user@example.com' }
+  // 重置 store 数据并重新加载默认用户数据
+  store.resetUserData()
+  store.initData(true)
   ElMessage.success('已退出登录')
 }
 

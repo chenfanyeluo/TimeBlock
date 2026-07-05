@@ -880,6 +880,9 @@ async function login() {
       email: result.user.email || accountForm.value.email
     }
     ElMessage.success('登录成功')
+    // 重置 store 数据并重新加载新用户数据
+    store.resetUserData()
+    store.initData(true)
     // 登录后自动加载同步状态
     await loadSyncStatus()
   } catch (err) {
@@ -898,7 +901,10 @@ async function register() {
   try {
     await authApi.register(accountForm.value.email, accountForm.value.password, accountForm.value.email.split('@')[0])
     ElMessage.success('注册成功，已自动登录')
-    // 注册后自动登录，刷新状态
+    // 注册后自动登录，重置 store 并重载新用户数据
+    store.resetUserData()
+    store.initData(true)
+    // 刷新认证状态
     await checkAuthStatus()
   } catch (err) {
     console.error('[Settings] 注册失败:', err)
@@ -913,6 +919,9 @@ function logout() {
   userInfo.value = { username: 'User', email: 'user@example.com' }
   lastSyncTime.value = ''
   cloudCount.value = 0
+  // 重置 store 数据并重新加载默认用户数据
+  store.resetUserData()
+  store.initData(true)
   ElMessage.success('已退出登录')
 }
 

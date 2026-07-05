@@ -13,6 +13,12 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 // Token 存储 Key
 const TOKEN_KEY = 'timeblock_access_token'
 
+// 用户 ID 存储 Key
+const USER_ID_KEY = 'timeblock_user_id'
+
+/** 默认用户 ID（未登录时回退值） */
+const DEFAULT_USER_ID = 1
+
 /**
  * 获取存储的 JWT Token
  */
@@ -36,6 +42,33 @@ export function setToken(token) {
  */
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
+}
+
+/**
+ * 获取当前用户 ID
+ * 未登录时返回默认值 1（向后兼容）
+ */
+export function getUserId() {
+  const stored = localStorage.getItem(USER_ID_KEY)
+  return stored ? parseInt(stored, 10) : DEFAULT_USER_ID
+}
+
+/**
+ * 存储用户 ID
+ */
+export function setUserId(id) {
+  if (id !== undefined && id !== null) {
+    localStorage.setItem(USER_ID_KEY, String(id))
+  } else {
+    localStorage.removeItem(USER_ID_KEY)
+  }
+}
+
+/**
+ * 清除用户 ID
+ */
+export function clearUserId() {
+  localStorage.removeItem(USER_ID_KEY)
 }
 
 /**
@@ -153,5 +186,8 @@ export default {
   getToken,
   setToken,
   clearToken,
+  getUserId,
+  setUserId,
+  clearUserId,
   isLoggedIn
 }
