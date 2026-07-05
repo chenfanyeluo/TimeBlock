@@ -19,11 +19,11 @@ const Note = sequelize.define('Note', {
     }
   },
   color: {
-    type: DataTypes.STRING(9),
+    type: DataTypes.STRING(7),
     allowNull: false,
     defaultValue: '#409eff',
     validate: {
-      is: { args: /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/, msg: '颜色格式不正确 (例: #409eff 或 #409eff80)' }
+      is: { args: /^#[0-9A-Fa-f]{6}$/, msg: '颜色格式不正确 (例: #409eff)' }
     }
   },
   auto_remind: {

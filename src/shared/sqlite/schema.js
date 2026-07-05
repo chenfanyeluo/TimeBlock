@@ -48,7 +48,7 @@ const SCHEMA_SQL = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     name VARCHAR(100) NOT NULL,
-    color VARCHAR(9) NOT NULL DEFAULT '#409eff',
+    color VARCHAR(7) NOT NULL DEFAULT '#409eff',
     auto_remind INTEGER NOT NULL DEFAULT 0 CHECK(auto_remind IN (0, 1)),
     default_advance_minutes INTEGER NOT NULL DEFAULT 5,
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
