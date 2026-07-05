@@ -6,9 +6,15 @@ on:
   pull_request:
     branches: [main, develop]
 
+env:
+  NODE_VERSION: '20'
+
 jobs:
+  # =============================================
+  # 服务器端测试
+  # =============================================
   server-test:
-    name: 后端服务测试
+    name: 服务器端测试
     runs-on: ubuntu-latest
 
     services:
@@ -26,12 +32,13 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: src/server/package-lock.json
 
@@ -39,37 +46,126 @@ jobs:
         working-directory: src/server
         run: npm ci
 
-      - name: Run server tests
+      - name: Create .env for test
+        working-directory: src/server
+        run: |
+          cat > .env << EOF
+          PORT=3000
+          NODE_ENV=test
+          DB_DIALECT=mysql
+          DB_HOST=localhost
+          DB_PORT=3306
+          DB_NAME=time_block_test
+          DB_USER=root
+          DB_PASSWORD=root
+          JWT_SECRET=ci-test-secret-key-32characters
+          JWT_EXPIRES_IN=1h
+          RATE_LIMIT_WINDOW_MS=60000
+          RATE_LIMIT_MAX=100
+          EOF
+
+      - name: Sync database tables
+        working-directory: src/server
+        run: node scripts/sync-db.js
+
+      - name: Start server in background
+        working-directory: src/server
+        run: |
+          node index.js &
+          sleep 5
+          curl -s http://localhost:3000/api/health || exit 1
+
+      - name: Run API tests
         working-directory: src/server
         env:
-          DB_DIALECT: mysql
-          DB_HOST: localhost
-          DB_PORT: 3306
-          DB_NAME: time_block_test
-          DB_USER: root
-          DB_PASSWORD: root
-          JWT_SECRET: test-secret
-          NODE_ENV: test
-        run: npm test
+          TEST_API_URL: http://localhost:3000
+          WAIT_FOR_SERVER: true
+        run: npm run test
 
+  # =============================================
+  # 客户端构建测试
+  # =============================================
   client-build:
     name: 客户端构建
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint || true
-
-      - name: Build
+      - name: Build client
         run: npm run build
+
+      - name: Check build output
+        shell: bash
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "Build output 'dist' directory not found"
+            exit 1
+          fi
+          echo "Build completed successfully"
+          ls -la dist/
+
+  # =============================================
+  # 服务器端 Lint 检查
+  # =============================================
+  server-lint:
+    name: 服务器端代码检查
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install ESLint (if needed)
+        working-directory: src/server
+        run: |
+          if [ -f .eslintrc.js ] || [ -f .eslintrc.json ] || [ -f .eslintrc.yml ]; then
+            npm install --save-dev eslint
+            npm run lint || true
+          else
+            echo "No ESLint configuration found, skipping lint check"
+          fi
+
+  # =============================================
+  # 一键启动脚本测试
+  # =============================================
+  start-script-test:
+    name: 启动脚本测试
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Test start script syntax
+        working-directory: src/server
+        run: |
+          node --check start.js || exit 1
+          node --check index.js || exit 1
+          node --check scripts/sync-db.js || exit 1
+          node --check scripts/test-api.js || exit 1
+          echo "All scripts syntax check passed"
