@@ -68,7 +68,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // =============================================
 
   syncStart: () => ipcRenderer.invoke('sync:start'),
-  syncStatus: (callback) => ipcRenderer.on('sync:status', callback),
+  syncStatus: () => ipcRenderer.invoke('sync:status'),
 
   // =============================================
   // 认证操作（保留原有 API）

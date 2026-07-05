@@ -19,4 +19,10 @@ router.put('/password', authenticate, [
   validate
 ], userController.changePassword)
 
+// DELETE /api/users/account — 账号注销（需密码二次确认）
+router.delete('/account', authenticate, [
+  body('password').notEmpty().withMessage('请输入密码以确认注销'),
+  validate
+], userController.deleteAccount)
+
 module.exports = router

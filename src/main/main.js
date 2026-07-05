@@ -297,6 +297,75 @@ function registerIPCHandlers() {
   // 系统通知（Electron 原生通知）
   // =============================================
 
+  // =============================================
+  // 同步操作
+  // =============================================
+
+  /** 手动触发同步 */
+  ipcMain.handle('sync:start', async () => {
+    try {
+      return { success: true, message: '同步功能需连接后端服务' }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  /** 同步状态监听 — 暂不支持推送，返回默认状态 */
+  ipcMain.handle('sync:status', async () => {
+    return { success: true, data: { status: 'idle', lastSync: null } }
+  })
+
+  // =============================================
+  // 认证操作
+  // =============================================
+
+  /** 用户登录（本地模式） */
+  ipcMain.handle('auth:login', async (_event, credentials) => {
+    try {
+      if (!credentials || !credentials.email) {
+        return { success: false, error: '邮箱不能为空' }
+      }
+      const user = sqlite.user.findByEmail(credentials.email)
+      if (!user) {
+        return { success: false, error: '用户不存在' }
+      }
+      return {
+        success: true,
+        data: {
+          user: { id: user.id, email: user.email, name: user.name, avatar: user.avatar },
+          accessToken: 'local-token'
+        }
+      }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  /** 用户登出 */
+  ipcMain.handle('auth:logout', async () => {
+    return { success: true }
+  })
+
+  /** 获取当前用户信息 */
+  ipcMain.handle('auth:getUser', async () => {
+    try {
+      const user = sqlite.user.findById(DEFAULT_USER_ID)
+      if (!user) {
+        return { success: false, error: '用户不存在' }
+      }
+      return {
+        success: true,
+        data: { id: user.id, email: user.email, name: user.name, avatar: user.avatar }
+      }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // =============================================
+  // 系统通知（Electron 原生通知）
+  // =============================================
+
   /** 显示原生系统通知 */
   ipcMain.handle('notification:show', async (_event, { title, body, icon }) => {
     try {
