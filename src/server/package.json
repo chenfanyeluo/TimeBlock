@@ -6,9 +6,12 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
+    "serve": "node start.js",
     "db:sync": "node scripts/sync-db.js",
     "db:seed": "node scripts/seed-db.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "db:init": "node scripts/sync-db.js",
+    "test": "node scripts/test-api.js",
+    "test:wait": "WAIT_FOR_SERVER=true node scripts/test-api.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -20,8 +23,7 @@
     "jsonwebtoken": "^9.0.0",
     "morgan": "^1.10.0",
     "mysql2": "^3.9.0",
-    "sequelize": "^6.37.0",
-    "sqlite3": "^5.1.0"
+    "sequelize": "^6.37.0"
   },
   "keywords": [],
   "author": "TimeBlock Team",
