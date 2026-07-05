@@ -74,6 +74,22 @@ async function handleAppExit() {
   }
 }
 
+/**
+ * 应用状态变化时处理（iOS/Android 进入后台/前台）
+ */
+async function handleAppStateChange(state) {
+  console.log('[App] 应用状态变化:', state)
+  if (state?.isActive === false) {
+    console.log('[App] 应用进入后台，立即持久化数据...')
+    try {
+      await database.checkpoint(true)
+      console.log('[App] ✅ 后台数据已持久化')
+    } catch (err) {
+      console.error('[App] ❌ 后台数据持久化失败:', err)
+    }
+  }
+}
+
 // 应用启动时初始化数据库
 onMounted(async () => {
   // 初始化数据库（Electron/Capacitor 平台）
@@ -139,7 +155,10 @@ onMounted(async () => {
     App.addListener('appPause', handleAppPause)
 
     // 应用退出（关闭应用）
-    App.addListener('appExit', handleAppExit)
+    App.addEventListener('appExit', handleAppExit)
+
+    // 应用状态变化（iOS/Android 进入后台/前台）
+    App.addEventListener('appStateChange', handleAppStateChange)
 
     console.log('[App] 已注册应用生命周期监听器')
   }

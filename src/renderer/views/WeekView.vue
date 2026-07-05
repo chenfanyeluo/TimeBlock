@@ -69,10 +69,6 @@ import { useTimeBlockStore } from '@stores/timeBlock'
 
 dayjs.locale('zh-cn')
 
-const props = defineProps({
-  hideHeader: { type: Boolean, default: false }
-})
-
 const store = useTimeBlockStore()
 const currentWeekStart = ref(dayjs().startOf('isoWeek'))
 const hourHeight = 50

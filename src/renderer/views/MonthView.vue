@@ -155,10 +155,6 @@ import dayjs from 'dayjs'
 import * as echarts from 'echarts'
 import { useTimeBlockStore } from '@stores/timeBlock'
 
-const props = defineProps({
-  hideHeader: { type: Boolean, default: false }
-})
-
 const store = useTimeBlockStore()
 const currentMonth = ref(dayjs())
 const pieChartRef = ref(null)

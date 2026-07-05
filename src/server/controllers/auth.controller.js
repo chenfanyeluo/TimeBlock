@@ -1,7 +1,6 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
-const { Op } = require('sequelize')
 const { User } = require('../models')
 const { success, error } = require('../utils/response')
 
@@ -201,7 +200,7 @@ async function resetPassword(req, res, next) {
     const user = await User.findOne({
       where: {
         reset_token: token,
-        reset_token_expires: { [Op.gt]: new Date() }
+        reset_token_expires: { [require('sequelize').Op.gt]: new Date() }
       }
     })
 

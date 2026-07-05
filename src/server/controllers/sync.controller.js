@@ -12,11 +12,6 @@ async function upload(req, res, next) {
   try {
     const { changes, lastSyncAt, deviceId } = req.body
     const userId = req.user.id
-
-    if (!changes || typeof changes !== 'object') {
-      return error(res, 'VALIDATION_ERROR', '缺少变更数据 (changes)', 400)
-    }
-
     let synced = 0
 
     const syncLog = await SyncLog.create({

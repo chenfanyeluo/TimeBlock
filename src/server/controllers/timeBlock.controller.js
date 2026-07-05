@@ -9,19 +9,13 @@ const { Op } = require('sequelize')
 async function list(req, res, next) {
   try {
     const {
-      date, startDate, endDate, noteId,
+      startDate, endDate, noteId,
       page = 1, pageSize = 20
     } = req.query
 
     const where = { user_id: req.user.id }
 
-    // 支持 ?date=YYYY-MM-DD 简洁写法（兼容前端API）
-    if (date) {
-      const dayStart = new Date(date + 'T00:00:00.000Z')
-      const dayEnd = new Date(date + 'T23:59:59.999Z')
-      where.start_time = { [Op.gte]: dayStart }
-      where.end_time = { [Op.lte]: dayEnd }
-    } else if (startDate && endDate) {
+    if (startDate && endDate) {
       where.start_time = { [Op.gte]: new Date(startDate) }
       where.end_time = { [Op.lte]: new Date(endDate) }
     } else if (startDate) {

@@ -49,7 +49,6 @@ function dbBlockToFrontend(dbBlock) {
     noteName: dbBlock.note_name || '未分类',
     noteColor: dbBlock.note_color || '#909399',
     title: dbBlock.title,
-    taskName: dbBlock.title || '',
     description: dbBlock.description,
     startTime: startDayjs.format('HH:mm'),
     endTime: endTime,
@@ -572,29 +571,53 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       if (platformInfo.isCapacitor) {
         // Capacitor 平台：直接使用 database 适配层
         console.log('[Store] Capacitor 平台：从数据库加载时间块', date)
-        
+
+        // 等待数据库初始化完成（与 loadNotesFromDB 一致）
+        let retryCount = 0
+        const maxRetry = 5
+        while (!database.isReady() && retryCount < maxRetry) {
+          console.log(`[Store] 数据库未初始化，等待... (${retryCount + 1}/${maxRetry})`)
+          await new Promise(resolve => setTimeout(resolve, 100))
+          retryCount++
+        }
+
+        if (!database.isReady()) {
+          console.warn('[Store] 数据库初始化超时，跳过加载时间块')
+          return
+        }
+
         const querySQL = `
-          SELECT tb.*, n.name as note_name, n.color as note_color 
-          FROM time_blocks tb 
-          LEFT JOIN notes n ON tb.note_id = n.id 
-          WHERE tb.user_id = 1 
+          SELECT tb.*, n.name as note_name, n.color as note_color
+          FROM time_blocks tb
+          LEFT JOIN notes n ON tb.note_id = n.id
+          WHERE tb.user_id = 1
             AND DATE(tb.start_time) = DATE(?)
             AND tb.deleted_at IS NULL
           ORDER BY tb.start_time ASC
         `
-        
+
         const result = await database.query(querySQL, [date])
         console.log('[Store] Capacitor 查询结果:', result.length)
-        
+
         const newBlocks = result.map(dbBlockToFrontend)
-        
-        // 合并到现有 blocks（避免重复）
-        const existingIds = new Set(blocks.value.map(b => b.id))
-        for (const block of newBlocks) {
-          if (!existingIds.has(block.id)) {
-            blocks.value.push(block)
+
+        // 合并策略：用新数据替换旧数据，并移除数据库中已删除的记录
+        // 同时保留其他日期（未在本次查询范围内）的旧记录
+        const existingMap = new Map(blocks.value.map(b => [b.id, b]))
+        const merged = []
+
+        for (const newBlock of newBlocks) {
+          merged.push(newBlock)
+          existingMap.delete(newBlock.id)
+        }
+
+        for (const [id, oldBlock] of existingMap) {
+          if (oldBlock.date !== date) {
+            merged.push(oldBlock)
           }
         }
+
+        blocks.value = merged
         console.log('[Store] Capacitor 加载时间块成功:', date, newBlocks.length, newBlocks)
       } else if (isElectron()) {
         // Electron 平台：使用 IPC
@@ -602,13 +625,23 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
         const result = await window.electronAPI.getTimeBlocksByDate(date)
         if (result.success && result.data) {
           const newBlocks = result.data.map(dbBlockToFrontend)
-          // 合并到现有 blocks（避免重复）
-          const existingIds = new Set(blocks.value.map(b => b.id))
-          for (const block of newBlocks) {
-            if (!existingIds.has(block.id)) {
-              blocks.value.push(block)
+
+          // 合并策略：用新数据替换旧数据，并移除数据库中已删除的记录
+          const existingMap = new Map(blocks.value.map(b => [b.id, b]))
+          const merged = []
+
+          for (const newBlock of newBlocks) {
+            merged.push(newBlock)
+            existingMap.delete(newBlock.id)
+          }
+
+          for (const [id, oldBlock] of existingMap) {
+            if (oldBlock.date !== date) {
+              merged.push(oldBlock)
             }
           }
+
+          blocks.value = merged
           console.log('[Store] Electron 加载时间块:', date, newBlocks.length)
         }
       }
@@ -789,6 +822,7 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
               return newBlock
             }
           }
+
         } else if (isElectron()) {
           // Electron 平台：使用 IPC
           console.log('[Store] Electron 平台：写入数据库')
@@ -885,33 +919,61 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       }
     } else if (platformInfo.isCapacitor && database.isReady()) {
       try {
-        const merged = { ...oldBlock, ...updates }
-        const dbData = frontendBlockToDb(merged)
-        const updateSQL = `
-          UPDATE time_blocks
-          SET note_id = ?, title = ?, description = ?, start_time = ?, end_time = ?, is_completed = ?
-          WHERE id = ? AND user_id = 1
-        `
-        await database.run(updateSQL, [
-          dbData.note_id,
-          dbData.title,
-          dbData.description,
-          dbData.start_time,
-          dbData.end_time,
-          dbData.is_completed,
-          id
-        ])
-        console.log('[Store] Capacitor 更新时间块:', id)
+        const mergedBlock = { ...oldBlock, ...updates }
+        const dbData = frontendBlockToDb(mergedBlock)
 
-        const updatedBlock = dbBlockToFrontend({ id, ...dbData, note_name: merged.noteName, note_color: merged.noteColor })
-        blocks.value[idx] = updatedBlock
-        return updatedBlock
+        const result = await database.run(
+          `UPDATE time_blocks
+           SET note_id = ?, title = ?, description = ?, start_time = ?, end_time = ?, is_completed = ?, updated_at = datetime('now')
+           WHERE id = ? AND user_id = 1 AND deleted_at IS NULL;`,
+          [
+            dbData.note_id,
+            dbData.title,
+            dbData.description,
+            dbData.start_time,
+            dbData.end_time,
+            dbData.is_completed,
+            id
+          ]
+        )
+
+        if (result.changes === 0) {
+          console.warn('[Store] Capacitor 更新时间块失败：未找到记录', id)
+          return null
+        }
+
+        // 重新查询更新后的记录（含便签信息）
+        const querySQL = `
+          SELECT tb.*, n.name as note_name, n.color as note_color
+          FROM time_blocks tb
+          LEFT JOIN notes n ON tb.note_id = n.id
+          WHERE tb.id = ? AND tb.deleted_at IS NULL
+        `
+        const newRecord = await database.query(querySQL, [id])
+
+        if (newRecord.length > 0) {
+          const updatedBlock = dbBlockToFrontend(newRecord[0])
+          blocks.value[idx] = updatedBlock
+          console.log('[Store] ✅ Capacitor 更新时间块:', id)
+
+          // 若开始时间（含日期）发生变化，同步更新关联提醒
+          const newStart = `${updatedBlock.date}T${updatedBlock.startTime}:00`
+          if (newStart !== oldStart) {
+            try {
+              await syncReminderAfterTimeBlockUpdate(updatedBlock)
+            } catch (reminderErr) {
+              console.warn('[Store] 同步提醒失败:', reminderErr)
+            }
+          }
+
+          return updatedBlock
+        }
       } catch (err) {
         console.error('[Store] Capacitor 更新时间块失败:', err)
       }
     }
 
-    // 非 Electron 环境或失败时，本地更新
+    // 非 Electron/Capacitor 环境或失败时，本地更新
     blocks.value[idx] = { ...oldBlock, ...updates }
     return blocks.value[idx]
   }
@@ -943,10 +1005,14 @@ export const useTimeBlockStore = defineStore('timeBlock', () => {
       }
     } else if (platformInfo.isCapacitor && database.isReady()) {
       try {
-        await database.run(
-          `UPDATE time_blocks SET deleted_at = datetime('now') WHERE id = ?;`,
+        const result = await database.run(
+          `UPDATE time_blocks SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL;`,
           [id]
         )
+
+        // 记录删除结果用于调试（不阻塞 UI 更新）
+        console.log('[Store] Capacitor 删除结果:', JSON.stringify(result), 'id:', id, 'type:', typeof id)
+
         blocks.value = blocks.value.filter(b => b.id !== id)
         console.log('[Store] ✅ Capacitor 删除时间块:', id)
         return true

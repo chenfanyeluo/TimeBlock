@@ -5,7 +5,7 @@
   "bundledWebRuntime": false,
   "plugins": {
     "SQLite": {
-      "iosDatabaseLocation": "Library/Caches",
+      "iosDatabaseLocation": "Library/LocalDatabase",
       "iosIsEncryption": false,
       "iosKeychainPrefix": "timeblock",
       "androidIsEncryption": false

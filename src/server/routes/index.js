@@ -8,7 +8,6 @@ const reminderRoutes = require('./reminder.routes')
 const statisticsRoutes = require('./statistics.routes')
 const syncRoutes = require('./sync.routes')
 const exportRoutes = require('./export.routes')
-const { importData } = require('../controllers/export.controller')
 
 const router = Router()
 
@@ -21,7 +20,6 @@ router.use('/reminders', reminderRoutes)
 router.use('/statistics', statisticsRoutes)
 router.use('/sync', syncRoutes)
 router.use('/export', exportRoutes)
-// import 路由单独挂载，避免污染 /api/ 根路径
-router.post('/import', importData)
+router.use('/', exportRoutes) // /api/import 也在这里
 
 module.exports = router

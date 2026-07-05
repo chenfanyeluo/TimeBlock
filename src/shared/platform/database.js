@@ -104,7 +104,7 @@ export const database = {
         await CapacitorSQLite.open({ database: 'timeblock_local' })
         isInitialized = true
         console.log('[Database] Capacitor SQLite 已打开')
-        
+
         // 执行建表 SQL（直接调用 CapacitorSQLite.run）
         console.log('[Database] 开始执行 Schema 建表...')
         for (const sql of SCHEMA_SQL) {
@@ -264,14 +264,14 @@ export const database = {
           changes: result.changes?.changes
         })
 
-        // ⚠️ 性能优化：使用批量 checkpoint 策略（每 5 秒执行一次）
+        // ⚠️ 性能优化：使用批量 checkpoint 策略
         // 不阻塞后续操作，提升性能
         this.checkpoint(false).catch(err => {
           console.error('[Database] Checkpoint 失败:', err)
         })
 
         return {
-          lastInsertRowid: result.changes?.lastInsertRowId || null,
+          lastInsertRowid: result.changes?.lastId || result.changes?.lastInsertRowId || null,
           changes: result.changes?.changes || 0
         }
       } else {

@@ -22,7 +22,7 @@
     <template v-if="isCompact">
       <div class="compact-row">
         <span class="compact-time">{{ displayStartTime }} - {{ displayEndTime }}</span>
-        <span class="compact-name">{{ (block.taskName || block.title) }}</span>
+        <span class="compact-name">{{ block.taskName }}</span>
         <span v-if="block.note" class="compact-note-inline">tip:{{ block.note }}</span>
         <span v-if="!block.note" class="category-badge" :style="{ background: categoryColor }">
           {{ categoryName }}
@@ -42,7 +42,7 @@
           <el-icon><Bell /></el-icon>
         </span>
       </div>
-      <div class="block-content">{{ (block.taskName || block.title) }}</div>
+      <div class="block-content">{{ block.taskName }}</div>
 
       <!-- 备注显示 -->
       <div v-if="block.note && !isEditingNote" class="block-note">tip：{{ block.note }}</div>
@@ -98,11 +98,16 @@ const noteText = ref('')
 
 // 拖拽状态（纯视觉，不触发 Vue 更新）
 const dragOffsetY = ref(0)       // transform 偏移量
+const dragOffsetX = ref(0)       // 水平偏移量（PC端跟随鼠标）
 const resizeDeltaY = ref(0)     // resize 高度变化量
 
 // 原始数据快照
 const snapshotStartMin = ref(0)
 const snapshotEndMin = ref(0)
+
+// PC端拖拽起始位置
+let _dragStartClientY = 0
+let _dragStartClientX = 0
 
 // ---- 移动端触摸拖拽状态 ----
 let _mobileBlockDragTimer = null
@@ -110,6 +115,15 @@ let _isMobileBlockDragging = false
 let _mobileDragStartY = 0         // 拖拽起始触摸 Y（用于计算 dragOffsetY）
 const MOBILE_BLOCK_DRAG_DELAY = 400 // 长按触发拖拽的延迟（毫秒）
 const isMobileDevice = ref(false) // 判断是否移动端
+
+// ---- 移动端双击检测 ----
+let _lastTouchTime = 0            // 上次触摸时间（用于双击检测）
+let _lastTouchX = 0               // 上次触摸 X 坐标
+let _lastTouchY = 0               // 上次触摸 Y 坐标
+const DOUBLE_TAP_INTERVAL = 300   // 双击间隔（毫秒）
+const DOUBLE_TAP_DISTANCE = 30    // 双击位置允许偏差（像素）
+let _isDoubleTap = false          // 是否是双击
+let _singleTapTimer = null        // 单击延迟触发计时器
 
 // 检测是否为移动端
 function checkMobile() {
@@ -252,7 +266,7 @@ const finalStyle = computed(() => {
 
   // 拖拽/resize 时叠加 transform
   if (isDragging.value || isResizing.value) {
-    absBase.transform = `translateY(${dragOffsetY.value}px)`
+    absBase.transform = `translate(${dragOffsetX.value}px, ${dragOffsetY.value}px)`
     absBase.zIndex = 1000
     absBase.willChange = 'transform'
   }
@@ -303,8 +317,6 @@ function snapToGrid(minutes, maxMinutes = 1440) {
 
 // ---- 统一拖拽（移动位置 / 拖到储备栏回收）----
 
-// 用闭包变量记录起始 Y，避免每次重新绑定
-let _dragStartClientY = 0
 const isOverPool = ref(false)  // 拖动时是否在储备栏区域上方
 
 // 点击选中（与拖拽分离：拖拽是 mousedown+move，点击是 click）
@@ -333,12 +345,53 @@ function handleDblClick() {
   setTimeout(() => {
     noteInputRef.value?.focus()
   }, 50)
+
+  // 添加全局点击/触摸监听器，点击外部元素时关闭编辑
+  document.addEventListener('click', handleExternalClick, { capture: true })
+  document.addEventListener('touchstart', handleExternalTouch, { capture: true, passive: false })
+}
+
+// 点击外部元素时关闭备注编辑（PC端）
+function handleExternalClick(e) {
+  if (!isEditingNote.value) return
+
+  // 检查点击是否在编辑区域内部
+  const noteEditor = noteInputRef.value?.$el || noteInputRef.value
+  if (noteEditor && (e.target === noteEditor || noteEditor.contains(e.target))) {
+    return // 点击在编辑区域内，不关闭
+  }
+
+  // 点击在编辑区域外，保存并关闭
+  saveNote()
+}
+
+// 触摸外部元素时关闭备注编辑（移动端）
+function handleExternalTouch(e) {
+  if (!isEditingNote.value) return
+
+  // 检查触摸是否在编辑区域内部
+  const noteEditor = noteInputRef.value?.$el || noteInputRef.value
+  if (noteEditor) {
+    for (const touch of e.touches) {
+      const target = document.elementFromPoint(touch.clientX, touch.clientY)
+      if (target && (target === noteEditor || noteEditor.contains(target))) {
+        return // 触摸在编辑区域内，不关闭
+      }
+    }
+  }
+
+  // 触摸在编辑区域外，保存并关闭
+  e.preventDefault() // 阻止后续事件
+  saveNote()
 }
 
 // 保存备注（失焦或回车触发）
 function saveNote() {
   if (!isEditingNote.value) return
   isEditingNote.value = false
+  // 移除全局点击/触摸监听器
+  document.removeEventListener('click', handleExternalClick, { capture: true })
+  document.removeEventListener('touchstart', handleExternalTouch, { capture: true })
   emit('update', { note: noteText.value.trim() || null })
 }
 
@@ -347,9 +400,11 @@ function handleMouseDown(e) {
       e.target.closest('.el-button')) return
 
   _dragStartClientY = e.clientY
+  _dragStartClientX = e.clientX
   snapshotStartMin.value = timeToMinutes(props.block.startTime)
   snapshotEndMin.value = timeToMinutes(props.block.endTime)
   dragOffsetY.value = 0
+  dragOffsetX.value = 0
 
   isDragging.value = true
 
@@ -360,6 +415,7 @@ function handleMouseDown(e) {
 function onDragMove(e) {
   if (!isDragging.value) return
   dragOffsetY.value = e.clientY - _dragStartClientY
+  dragOffsetX.value = e.clientX - _dragStartClientX
   // 用 elementFromPoint 检测鼠标是否在储备栏 DOM 区域上方
   const over = isMouseOverPool(e.clientX, e.clientY)
   isOverPool.value = over
@@ -385,11 +441,12 @@ function onDragEnd(e) {
     // 回收：通知父组件删除块并回收到储备栏
     isDragging.value = false
     dragOffsetY.value = 0
+    dragOffsetX.value = 0
     isOverPool.value = false
 
     emit('recycle', {
       blockId: props.block.id,
-      taskName: props.block.taskName || props.block.title,
+      taskName: props.block.taskName,
       categoryColor: categoryColor.value,
     })
     document.removeEventListener('mousemove', onDragMove)
@@ -436,6 +493,7 @@ function onDragEnd(e) {
   // 重置拖拽状态
   isDragging.value = false
   dragOffsetY.value = 0
+  dragOffsetX.value = 0
   isOverPool.value = false
 
   // 只在位置确实改变时才 emit
@@ -518,9 +576,43 @@ function onBlockTouchStart(e) {
   // 阻止默认行为（防止浏览器长按弹出菜单）
   e.preventDefault()
 
+  const touch = e.touches[0]
+  const now = Date.now()
+
+  // ---- 双击检测 ----
+  const timeDiff = now - _lastTouchTime
+  const distanceX = Math.abs(touch.clientX - _lastTouchX)
+  const distanceY = Math.abs(touch.clientY - _lastTouchY)
+
+  if (timeDiff < DOUBLE_TAP_INTERVAL && distanceX < DOUBLE_TAP_DISTANCE && distanceY < DOUBLE_TAP_DISTANCE) {
+    // 双击：触发备注编辑
+    _isDoubleTap = true
+    _suppressNextClick = true // 阻止后续单击上下文菜单
+    _lastTouchTime = 0 // 重置，避免三击被误判
+
+    // 清除长按计时器和单击计时器
+    if (_mobileBlockDragTimer) {
+      clearTimeout(_mobileBlockDragTimer)
+      _mobileBlockDragTimer = null
+    }
+    if (_singleTapTimer) {
+      clearTimeout(_singleTapTimer)
+      _singleTapTimer = null
+    }
+
+    // 触发双击编辑
+    handleDblClick()
+    return
+  }
+
+  // ---- 单击处理 ----
+  _isDoubleTap = false
+  _lastTouchTime = now
+  _lastTouchX = touch.clientX
+  _lastTouchY = touch.clientY
+
   _mobileTouchMoved = false
   _suppressNextClick = false
-  const touch = e.touches[0]
 
   // 启动长按计时器（长按触发拖拽）
   _mobileBlockDragTimer = setTimeout(() => {
@@ -620,7 +712,7 @@ function onBlockTouchEnd(e) {
 
       emit('recycle', {
         blockId: props.block.id,
-        taskName: props.block.taskName || props.block.title,
+        taskName: props.block.taskName,
         categoryColor: categoryColor.value,
       })
     } else {
@@ -675,19 +767,38 @@ function onBlockTouchEnd(e) {
       categoryColor: categoryColor.value,
       categoryName: categoryName.value
     })
-  } else if (!_mobileTouchMoved) {
-    // 短触摸（单击）：触发上下文菜单，并阻止后续 click 事件
-    _suppressNextClick = true
-    _mobileTouchMoved = false
+  } else if (!_mobileTouchMoved && !_isDoubleTap) {
+    // 短触摸（单击）：延迟触发上下文菜单，等待可能的第二次点击（双击检测）
     const touch = e.changedTouches[0]
-    emit('mobile-context-menu', {
-      block: props.block,
-      clientX: touch.clientX,
-      clientY: touch.clientY
-    })
+
+    // 清除之前的单击计时器
+    if (_singleTapTimer) {
+      clearTimeout(_singleTapTimer)
+    }
+
+    // 延迟触发单击，等待双击检测时间窗口
+    _singleTapTimer = setTimeout(() => {
+      if (_isDoubleTap) return // 如果已经触发双击，不触发单击
+
+      _suppressNextClick = true
+      _mobileTouchMoved = false
+      _isDoubleTap = false
+      _singleTapTimer = null
+
+      emit('mobile-context-menu', {
+        block: props.block,
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      })
+    }, DOUBLE_TAP_INTERVAL)
   } else {
-    // 移动触摸（滑动）：重置状态
+    // 移动触摸（滑动）或双击后：重置状态
     _mobileTouchMoved = false
+    _isDoubleTap = false
+    if (_singleTapTimer) {
+      clearTimeout(_singleTapTimer)
+      _singleTapTimer = null
+    }
   }
 }
 </script>

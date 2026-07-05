@@ -1,5 +1,4 @@
-﻿const ExcelJS = require('exceljs')
-const { TimeBlock, Note } = require('../models')
+﻿const { TimeBlock, Note } = require('../models')
 const sequelize = require('../config/database')
 const { success, error } = require('../utils/response')
 
@@ -29,14 +28,10 @@ function parseDate(value) {
 
 /**
  * GET /api/export
- * 导出当前登录用户的便签和时间块数据
- * ?format=json  → JSON（默认）
- * ?format=excel → .xlsx 下载
+ * 导出当前登录用户的便签和时间块数据为 JSON
  */
 async function exportData(req, res, next) {
   try {
-    const { format = 'json' } = req.query
-
     // 查询当前用户的所有便签（包含软删除的，便于完整备份）
     const notes = await Note.findAll({
       where: { user_id: req.user.id },
@@ -56,11 +51,6 @@ async function exportData(req, res, next) {
         }
       ]
     })
-
-    // Excel 格式导出
-    if (format === 'excel' || format === 'xlsx') {
-      return exportExcel(res, req.user, notes, timeBlocks)
-    }
 
     const exportPayload = {
       schemaVersion: EXPORT_SCHEMA_VERSION,
@@ -90,139 +80,6 @@ async function exportData(req, res, next) {
   } catch (err) {
     next(err)
   }
-}
-
-/**
- * Excel 格式导出（exceljs）
- * 生成两个工作表：时间块记录 + 便签统计
- */
-async function exportExcel(res, user, notes, timeBlocks) {
-  const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'TimeBlock'
-  workbook.created = new Date()
-
-  // =============================================
-  // 工作表 1: 时间块记录
-  // =============================================
-  const blocksSheet = workbook.addWorksheet('时间块记录', {
-    properties: { tabColor: { argb: '409EFF' } }
-  })
-
-  blocksSheet.columns = [
-    { header: '序号', key: 'index', width: 6 },
-    { header: '标题', key: 'title', width: 24 },
-    { header: '描述/备注', key: 'description', width: 36 },
-    { header: '便签', key: 'noteName', width: 12 },
-    { header: '开始时间', key: 'startTime', width: 20 },
-    { header: '结束时间', key: 'endTime', width: 20 },
-    { header: '时长(小时)', key: 'duration', width: 12 },
-    { header: '已完成', key: 'isCompleted', width: 10 }
-  ]
-
-  const headerStyle = {
-    font: { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 },
-    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: '409EFF' } },
-    alignment: { horizontal: 'center', vertical: 'middle' }
-  }
-  blocksSheet.getRow(1).eachCell(cell => Object.assign(cell, headerStyle))
-  blocksSheet.getRow(1).height = 22
-
-  timeBlocks.forEach((tb, idx) => {
-    const startTime = new Date(tb.start_time)
-    const endTime = new Date(tb.end_time)
-    const durationHours = ((endTime - startTime) / (1000 * 60 * 60)).toFixed(2)
-
-    const row = blocksSheet.addRow({
-      index: idx + 1,
-      title: tb.title,
-      description: tb.description || '',
-      noteName: tb.note?.name || '—',
-      startTime: fmtDateTime(startTime),
-      endTime: fmtDateTime(endTime),
-      duration: parseFloat(durationHours),
-      isCompleted: tb.is_completed ? '是' : '否'
-    })
-
-    if (idx % 2 === 0) {
-      row.eachCell(cell => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F5F7FA' } }
-      })
-    }
-  })
-
-  blocksSheet.views = [{ state: 'frozen', ySplit: 1 }]
-
-  // =============================================
-  // 工作表 2: 便签统计
-  // =============================================
-  const notesSheet = workbook.addWorksheet('便签统计', {
-    properties: { tabColor: { argb: '67C23A' } }
-  })
-
-  notesSheet.columns = [
-    { header: '便签名称', key: 'name', width: 16 },
-    { header: '颜色', key: 'color', width: 12 },
-    { header: '时间块数量', key: 'blockCount', width: 14 },
-    { header: '总时长(小时)', key: 'totalDuration', width: 16 }
-  ]
-
-  const noteHeaderStyle = { ...headerStyle, fill: { ...headerStyle.fill, fgColor: { argb: '67C23A' } } }
-  notesSheet.getRow(1).eachCell(cell => Object.assign(cell, noteHeaderStyle))
-  notesSheet.getRow(1).height = 22
-
-  notes.forEach((note, idx) => {
-    const noteBlocks = timeBlocks.filter(tb => tb.note_id === note.id)
-    const totalDuration = noteBlocks.reduce((sum, tb) => {
-      return sum + (new Date(tb.end_time) - new Date(tb.start_time)) / (1000 * 60 * 60)
-    }, 0)
-
-    const row = notesSheet.addRow({
-      name: note.name,
-      color: note.color,
-      blockCount: noteBlocks.length,
-      totalDuration: parseFloat(totalDuration.toFixed(2))
-    })
-
-    // 颜色标记单元格
-    try {
-      const hex = note.color.replace('#', '')
-      const colorCell = row.getCell('color')
-      colorCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hex } }
-    } catch { /* 忽略颜色解析错误 */ }
-
-    if (idx % 2 === 0) {
-      row.eachCell(cell => {
-        if (cell.col !== 2) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F5F7FA' } }
-        }
-      })
-    }
-  })
-
-  notesSheet.views = [{ state: 'frozen', ySplit: 1 }]
-
-  // 输出 Excel 文件
-  const fileName = `TimeBlock_${user.name || user.email}_${fmtDate(new Date())}.xlsx`
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`)
-  await workbook.xlsx.write(res)
-  res.end()
-}
-
-function fmtDateTime(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  const h = String(date.getHours()).padStart(2, '0')
-  const min = String(date.getMinutes()).padStart(2, '0')
-  return `${y}-${m}-${d} ${h}:${min}`
-}
-
-function fmtDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}${m}${d}`
 }
 
 /**
