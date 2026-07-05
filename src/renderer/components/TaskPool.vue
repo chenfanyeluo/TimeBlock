@@ -53,6 +53,13 @@
             <Tickets />
           </el-icon>
           <el-button
+            size="small"
+            :icon="Edit"
+            circle
+            class="edit-btn"
+            @click.stop="openEditDialog(note)"
+          />
+          <el-button
             type="danger"
             size="small"
             :icon="Delete"
@@ -76,7 +83,7 @@
             <el-input v-model="newNote.name" placeholder="例如：工作、学习、运动" />
           </el-form-item>
           <el-form-item label="颜色">
-            <el-color-picker v-model="newNote.color" show-alpha />
+            <el-color-picker v-model="newNote.color" show-alpha color-format="hex" />
           </el-form-item>
           <el-form-item label="默认时长">
             <el-select v-model="newNote.duration" placeholder="选择时长">
@@ -100,7 +107,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Delete, Plus, Tickets } from '@element-plus/icons-vue'
+import { Delete, Edit, Plus, Tickets } from '@element-plus/icons-vue'
 import { ElMessage } from '@utils/message'
 import { useTimeBlockStore } from '@stores/timeBlock'
 
@@ -213,6 +220,18 @@ function onDragStart(event, note) {
 // 便签点击处理
 function handleNoteClick(note, event) {
   emit('note-click', note, event)
+}
+
+// 打开编辑对话框（带现有数据）
+function openEditDialog(note) {
+  editingId.value = note.id
+  dialogTitle.value = '编辑便签'
+  newNote.value = {
+    name: note.name,
+    color: note.color,
+    duration: note.duration || 30
+  }
+  showAddDialog.value = true
 }
 
 // 添加/编辑确认
