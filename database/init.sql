@@ -56,7 +56,7 @@ CREATE TABLE `notes` (
   `id`                      BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `user_id`                 BIGINT        NOT NULL                COMMENT '所属用户ID',
   `name`                    VARCHAR(100)  NOT NULL                COMMENT '便签名称',
-  `color`                   VARCHAR(7)    NOT NULL DEFAULT '#409eff' COMMENT '便签颜色 (HEX)',
+  `color`                   VARCHAR(9)    NOT NULL DEFAULT '#409eff' COMMENT '便签颜色 (HEX, 支持透明度 #RRGGBBAA)',
   `auto_remind`             TINYINT(1)    NOT NULL DEFAULT 0      COMMENT '是否自动提醒 (0/1)',
   `default_advance_minutes` INT           NOT NULL DEFAULT 5      COMMENT '默认提前提醒分钟数',
   `created_at`              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
